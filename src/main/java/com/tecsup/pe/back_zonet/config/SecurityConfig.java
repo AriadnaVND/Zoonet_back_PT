@@ -17,10 +17,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                // Habilita CORS y desactiva CSRF para permitir peticiones externas (Postman, Flutter, etc.)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable()) // DESACTIVA CSRF para REST
+                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/payment/**").permitAll() // rutas públicas
+                        // ✅ Rutas públicas (sin autenticación)
+                        .requestMatchers(
+                                "/api/auth/**",        // Registro y login
+                                "/api/payment/**",     // Pasarela de pago
+                                "/api/pets/**",        // Subida de foto de mascota
+                                "/uploads/**",         // Acceso a las fotos guardadas
+                                "/api/subscriptions/**" // Selección de plan
+                        ).permitAll()
+
+                        // ❌ Todo lo demás requiere autenticación
                         .anyRequest().authenticated()
                 );
 
@@ -30,16 +40,22 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Permite cualquier origen (necesario para localhost:puerto en Flutter Web)
+
+        // Permitir cualquier origen (útil para Postman y pruebas)
         configuration.setAllowedOrigins(Arrays.asList("*"));
-        // Permite los métodos que usa el front-end, incluyendo OPTIONS para el preflight
+
+        // Permitir todos los métodos HTTP
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // Permite cualquier encabezado, esencial para Content-Type, etc.
+
+        // Permitir todos los headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
 
+        // Si no se usan cookies o token, dejar false
+        configuration.setAllowCredentials(false);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Aplica esta configuración CORS a todas las rutas (/**)
         source.registerCorsConfiguration("/**", configuration);
+
         return source;
     }
 
