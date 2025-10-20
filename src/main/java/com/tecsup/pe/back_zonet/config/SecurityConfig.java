@@ -17,21 +17,13 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Habilita CORS y desactiva CSRF para permitir peticiones externas (Postman, Flutter, etc.)
+                // Habilita CORS y desactiva CSRF
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        // ✅ Rutas públicas (sin autenticación)
-                        .requestMatchers(
-                                "/api/auth/**",        // Registro y login
-                                "/api/payment/**",     // Pasarela de pago
-                                "/api/pets/**",        // Subida de foto de mascota
-                                "/uploads/**",         // Acceso a las fotos guardadas
-                                "/api/subscriptions/**" // Selección de plan
-                        ).permitAll()
 
-                        // ❌ Todo lo demás requiere autenticación
-                        .anyRequest().authenticated()
+                // 🔹 TEMPORAL: permitir todas las rutas para pruebas
+                .authorizeHttpRequests(auth -> auth
+                        .anyRequest().permitAll()
                 );
 
         return http.build();
@@ -41,17 +33,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Permitir cualquier origen (útil para Postman y pruebas)
-        configuration.setAllowedOrigins(Arrays.asList("*"));
-
-        // Permitir todos los métodos HTTP
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-
-        // Permitir todos los headers
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-
-        // Si no se usan cookies o token, dejar false
-        configuration.setAllowCredentials(false);
+        configuration.setAllowedOrigins(Arrays.asList("*")); // Permitir cualquier origen
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS")); // Todos los métodos
+        configuration.setAllowedHeaders(Arrays.asList("*")); // Todos los headers
+        configuration.setAllowCredentials(false); // No usamos cookies ni sesión
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
