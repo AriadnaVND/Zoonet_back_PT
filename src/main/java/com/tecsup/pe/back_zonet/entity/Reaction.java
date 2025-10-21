@@ -8,11 +8,13 @@ import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // ❗ IMPORTANTE
 
 @Entity
-@Table(name = "comments")
+@Table(name = "reactions", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"post_id", "user_id"})
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Comment {
+public class Reaction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,13 +23,12 @@ public class Comment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id", nullable = false)
     @JsonIgnoreProperties({"comments", "reactions", "hibernateLazyInitializer", "handler"}) // ❗ FIX: Ignorar listas del Post
-    private CommunityPost post; // Publicación a la que pertenece el comentario
+    private CommunityPost post;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) // ❗ FIX
-    private User user; // Usuario que hizo el comentario
+    private User user;
 
-    private String content;
     private LocalDateTime createdAt = LocalDateTime.now();
 }
