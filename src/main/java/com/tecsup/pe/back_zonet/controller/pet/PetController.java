@@ -2,15 +2,16 @@ package com.tecsup.pe.back_zonet.controller.pet;
 
 import com.tecsup.pe.back_zonet.entity.Pet;
 import com.tecsup.pe.back_zonet.entity.User;
-import com.tecsup.pe.back_zonet.entity.Subscription;
 import com.tecsup.pe.back_zonet.service.pet.PetService;
 import com.tecsup.pe.back_zonet.service.auth.PaymentService;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
+import com.tecsup.pe.back_zonet.dto.PaymentResponse; // 💡 CORRECCIÓN: Añadir import
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.Map; // 💡 CORRECCIÓN: Añadir import
 
 import java.io.File;
 import java.io.IOException;
@@ -29,12 +30,14 @@ public class PetController {
     private UserRepository userRepository;
 
     @Autowired
-    private PaymentService paymentService; // <--- Inyectamos el servicio de pagos
+    private PaymentService paymentService;
 
     private static final String UPLOAD_DIR = "uploads/";
 
     /**
      * 📸 Registrar mascota y plan del usuario
+     * 💡 Lógica actualizada: Para el plan PREMIUM, ahora devuelve una URL de redirección
+     * de la pasarela de pagos (PaymentResponse).
      */
     @PostMapping(
             value = "/{userId}/register",
@@ -73,18 +76,23 @@ public class PetController {
             pet.setName(petName);
             pet.setPhotoUrl("/" + UPLOAD_DIR + fileName);
             pet.setUser(user);
-            petService.save(pet);
+            petService.save(pet); // <--- Mascota registrada
 
-            // Actualizar plan del usuario y crear suscripción si es PREMIUM
+            // 💡 LÓGICA DE PAGO ACTUALIZADA: Devolver la URL de la pasarela
             if (planType.equalsIgnoreCase("premium")) {
-                Subscription subscription = paymentService.makePremiumPayment(userId);
-                return ResponseEntity.status(HttpStatus.CREATED)
-                        .body("Mascota registrada y plan PREMIUM activado. Suscripción creada con ID: " + subscription.getId());
+                // Inicia la transacción y obtiene el objeto de respuesta de pago (PaymentResponse)
+                PaymentResponse paymentResponse = paymentService.createPaymentRedirect(userId); // 💡 CORRECCIÓN: Usar el tipo PaymentResponse
+
+                // El frontend recibirá el objeto con la URL de redirección
+                return ResponseEntity.ok(paymentResponse);
             } else {
+                // Si es FREE, actualiza el plan y devuelve el mensaje estructurado
                 user.setPlan("FREE");
                 userRepository.save(user);
+
+                // Si es FREE, devuelve un mensaje simple con estructura JSON
                 return ResponseEntity.status(HttpStatus.CREATED)
-                        .body("Mascota registrada con plan FREE");
+                        .body(Map.of("message", "Mascota registrada con plan FREE", "planType", "FREE"));
             }
 
         } catch (IOException e) {

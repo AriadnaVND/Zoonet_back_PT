@@ -13,9 +13,14 @@ public class PaymentController {
     @Autowired
     private PaymentService paymentService;
 
-    @PostMapping("/premium/{userId}")
-    public ResponseEntity<Subscription> makePremium(@PathVariable Long userId) {
-        Subscription subscription = paymentService.makePremiumPayment(userId);
+    /**
+     * 🟢 Endpoint de Confirmación de Pago (Webhook Simulado)
+     * Resuelve el error de makePremiumPayment al usar el nuevo flujo.
+     */
+    @PostMapping("/confirm/{userId}") // 💡 CORRECCIÓN: Ruta para la confirmación del pago
+    public ResponseEntity<Subscription> confirmPremiumPayment(@PathVariable Long userId) { // 💡 CORRECCIÓN: Nombre de método
+        // 💡 CORRECCIÓN: Llama al método que completa la transacción
+        Subscription subscription = paymentService.completePremiumPayment(userId);
         return ResponseEntity.ok(subscription);
     }
 }
