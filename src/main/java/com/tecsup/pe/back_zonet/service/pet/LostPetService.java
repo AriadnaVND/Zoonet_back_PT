@@ -4,18 +4,21 @@ import com.tecsup.pe.back_zonet.dto.LostPetDTO;
 import com.tecsup.pe.back_zonet.entity.LostPet;
 import com.tecsup.pe.back_zonet.entity.Pet;
 import com.tecsup.pe.back_zonet.entity.CommunityPost;
+import com.tecsup.pe.back_zonet.entity.User; // 💡 NECESARIO: Para la lógica de comunidad y owner.
 import com.tecsup.pe.back_zonet.exception.PetNotFoundException;
 import com.tecsup.pe.back_zonet.exception.UserLimitExceededException;
 import com.tecsup.pe.back_zonet.repository.LostPetRepository;
 import com.tecsup.pe.back_zonet.repository.PetRepository;
 import com.tecsup.pe.back_zonet.repository.CommunityRepository;
+import com.tecsup.pe.back_zonet.repository.UserRepository; // 💡 NECESARIO: Para obtener todos los usuarios (comunidad).
+import com.tecsup.pe.back_zonet.service.notification.NotificationService; // 💡 NECESARIO: Servicio de Notificaciones.
 import com.tecsup.pe.back_zonet.util.RoleValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors; // 💡 NECESARIO: Para el filtro de la comunidad.
 
 @Service
 public class LostPetService {
@@ -34,6 +37,14 @@ public class LostPetService {
     @Autowired
     private RoleValidator roleValidator;
 
+    // 💡 AGREGADO: Inyección del repositorio de usuarios para la comunidad
+    @Autowired
+    private UserRepository userRepository;
+
+    // 💡 AGREGADO: Inyección del nuevo servicio de notificaciones
+    @Autowired
+    private NotificationService notificationService;
+
     /**
      * 🟢 Reporta una mascota como perdida (Alerta de Emergencia del Dueño).
      * Crea un LostPet y un CommunityPost asociado.
@@ -44,11 +55,11 @@ public class LostPetService {
         Pet pet = petRepository.findById(request.getPetId())
                 .orElseThrow(() -> new PetNotFoundException("Mascota no encontrada con ID: " + request.getPetId()));
 
-        Long userId = pet.getUser().getId();
+        Long ownerId = pet.getUser().getId(); // Usar ownerId en lugar de userId para claridad en la lógica de notif.
 
         // 1. Validación de límite de reportes para usuarios Free
-        if (roleValidator.isFreeUser(userId)) {
-            long activeReports = lostPetRepository.countActiveReportsByUserId(userId);
+        if (roleValidator.isFreeUser(ownerId)) {
+            long activeReports = lostPetRepository.countActiveReportsByUserId(ownerId);
             if (activeReports >= FREE_REPORT_LIMIT) {
                 throw new UserLimitExceededException("Los usuarios Free solo pueden tener " + FREE_REPORT_LIMIT + " reportes de mascotas perdidas activos.");
             }
@@ -77,6 +88,39 @@ public class LostPetService {
         post.setLostPetSource(savedLostPet); // Vincula el post al reporte
         communityRepository.save(post);
 
+        // 💡 4A. GENERACIÓN AUTOMÁTICA DE NOTIFICACIÓN DE ALERTA AL DUEÑO
+        String ownerTitle = "¡ALERTA DE EMERGENCIA: " + pet.getName() + " PERDIDO!";
+        String ownerMessage = "Tu mascota se perdió en " + request.getLastSeenLocation() + ". Revisa el feed de la comunidad.";
+
+        notificationService.createSystemNotification(
+                ownerId, // Notificación solo al dueño
+                ownerTitle,
+                ownerMessage,
+                "LOST_ALERT",
+                "HIGH" // Prioridad ALTA para la diferenciación Premium/SMS
+        );
+
+        // 💡 4B. GENERACIÓN AUTOMÁTICA DE NOTIFICACIÓN A LA COMUNIDAD
+        String communityTitle = "🚨 ¡AVISTAMIENTO! Mascota Perdida Cerca 🚨";
+        String communityMessage = pet.getName() + " fue visto por última vez en " + request.getLastSeenLocation() + ". Ayuda a buscar.";
+
+        // Obtener todos los usuarios de la comunidad, excluyendo al dueño
+        List<User> communityUsers = userRepository.findAll().stream()
+                .filter(user -> !user.getId().equals(ownerId)) // Filtra al dueño
+                .collect(Collectors.toList());
+
+        // Enviar la notificación a cada usuario de la comunidad
+        for (User user : communityUsers) {
+            notificationService.createSystemNotification(
+                    user.getId(),
+                    communityTitle,
+                    communityMessage,
+                    "COMMUNITY_ALERT",
+                    "MEDIUM" // Prioridad media para la comunidad
+            );
+        }
+        // FIN AGREGADO
+
         return savedLostPet;
     }
 
@@ -99,6 +143,18 @@ public class LostPetService {
 
         lostPet.setFound(true);
         lostPetRepository.save(lostPet);
+
+        // 💡 AGREGADO: GENERACIÓN AUTOMÁTICA DE NOTIFICACIÓN DE ENCONTRADO
+        User owner = lostPet.getPet().getUser();
+
+        notificationService.createSystemNotification(
+                owner.getId(),
+                "¡ÉXITO! " + lostPet.getPet().getName() + " ENCONTRADO.",
+                "Felicidades, tu mascota ha sido marcada como encontrada y segura.",
+                "FOUND",
+                "MEDIUM"
+        );
+        // FIN AGREGADO
 
         // Opcional: Marcar el CommunityPost asociado como "Inactivo" o eliminarlo
         if (lostPet.getCommunityPost() != null) {
