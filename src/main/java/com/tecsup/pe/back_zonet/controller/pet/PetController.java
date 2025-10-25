@@ -2,6 +2,7 @@ package com.tecsup.pe.back_zonet.controller.pet;
 
 import com.tecsup.pe.back_zonet.entity.Pet;
 import com.tecsup.pe.back_zonet.entity.User;
+import com.tecsup.pe.back_zonet.exception.PetNotFoundException;
 import com.tecsup.pe.back_zonet.service.pet.PetService;
 import com.tecsup.pe.back_zonet.service.auth.PaymentService;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
@@ -11,6 +12,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.tecsup.pe.back_zonet.repository.PetRepository;
+
+import java.util.HashMap;
 import java.util.Map; // 💡 CORRECCIÓN: Añadir import
 
 import java.io.File;
@@ -31,6 +35,9 @@ public class PetController {
 
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private PetRepository petRepository;
 
     private static final String UPLOAD_DIR = "uploads/";
 
@@ -78,6 +85,10 @@ public class PetController {
             pet.setUser(user);
             petService.save(pet); // <--- Mascota registrada
 
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("petId", pet.getId());
+            responseData.put("planType", planType);
+
             // 💡 LÓGICA DE PAGO ACTUALIZADA: Devolver la URL de la pasarela
             if (planType.equalsIgnoreCase("premium")) {
                 // Inicia la transacción y obtiene el objeto de respuesta de pago (PaymentResponse)
@@ -99,5 +110,19 @@ public class PetController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al guardar la foto: " + e.getMessage());
         }
+    }
+
+    /**
+     * 🟢 NUEVO ENDPOINT: GET /api/pets/user/{userId}
+     * Obtiene la primera mascota registrada del usuario (para la foto del Home).
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<Pet> getPetByUserId(@PathVariable Long userId) {
+
+        Pet pet = petRepository.findByUserId(userId).stream().findFirst()
+                .orElseThrow(() -> new PetNotFoundException("No se encontró una mascota registrada para el usuario: " + userId));
+
+        // Retorna el objeto Pet, incluyendo el 'photoUrl' real.
+        return ResponseEntity.ok(pet);
     }
 }
