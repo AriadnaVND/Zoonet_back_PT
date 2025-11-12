@@ -20,7 +20,7 @@ public class SafeZoneService {
     }
 
     public SafeZone createSafeZone(SafeZone zone) {
-        Long userId = zone.getUserId();
+        Long userId = zone.getUser().getId(); // ⚠️ CORREGIDO: USAR getUser().getId()
 
         // Valida límite de zonas si el usuario es Free
         if (roleValidator.isFreeUser(userId)) {
