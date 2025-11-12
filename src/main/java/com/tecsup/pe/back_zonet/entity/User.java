@@ -18,6 +18,8 @@ public class User {
 
     private String name;
     private String email;
+
+    @JsonIgnore // 🔒 CORRECCIÓN DE SEGURIDAD
     private String password;
 
     private String plan; // FREE o PREMIUM

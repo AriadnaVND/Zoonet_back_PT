@@ -15,17 +15,31 @@ public class RoleValidator {
         this.userRepository = userRepository;
     }
 
-    // Verifica si el usuario es Free
+    /**
+     * Verifica si el usuario es Free (o si el plan es nulo/desconocido, asumiendo Free)
+     */
     public boolean isFreeUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
-        return user.getPlan().equalsIgnoreCase("FREE");
+
+        // 🚨 CORRECCIÓN: Manejar si getPlan() devuelve null.
+        String plan = user.getPlan();
+
+        // Asume que si el plan es null, es lo mismo que ser FREE (o no premium).
+        return plan == null || plan.trim().equalsIgnoreCase("FREE");
     }
 
-    // Verifica si el usuario es Premium
+    /**
+     * Verifica si el usuario es Premium
+     */
     public boolean isPremiumUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
-        return user.getPlan().equalsIgnoreCase("PREMIUM");
+
+        // 🚨 CORRECCIÓN: Manejar si getPlan() devuelve null.
+        String plan = user.getPlan();
+
+        // Solo es Premium si el String es exactamente "PREMIUM"
+        return plan != null && plan.trim().equalsIgnoreCase("PREMIUM");
     }
 }

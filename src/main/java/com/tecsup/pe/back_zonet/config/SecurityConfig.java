@@ -21,8 +21,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
-                // 🔹 TEMPORAL: permitir todas las rutas para pruebas
+                // 🔹 Configuración de Autorización: TEMPORALMENTE permite todas las rutas
                 .authorizeHttpRequests(auth -> auth
+                        // **Aseguramos que el endpoint de AI Matching esté EXPLICITAMENTE permitido.**
+                        .requestMatchers("/api/community/ai-matching/**").permitAll()
+
+                        // Permite todas las demás rutas (siguiendo tu lógica original de pruebas)
                         .anyRequest().permitAll()
                 );
 

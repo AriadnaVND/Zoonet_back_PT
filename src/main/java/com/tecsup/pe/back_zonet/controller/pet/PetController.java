@@ -6,17 +6,15 @@ import com.tecsup.pe.back_zonet.exception.PetNotFoundException;
 import com.tecsup.pe.back_zonet.service.pet.PetService;
 import com.tecsup.pe.back_zonet.service.auth.PaymentService;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
-import com.tecsup.pe.back_zonet.dto.PaymentResponse; // 💡 CORRECCIÓN: Añadir import
+import com.tecsup.pe.back_zonet.repository.PetRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import com.tecsup.pe.back_zonet.repository.PetRepository;
 
 import java.util.HashMap;
-import java.util.Map; // 💡 CORRECCIÓN: Añadir import
-
+import java.util.Map;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,7 +32,7 @@ public class PetController {
     private UserRepository userRepository;
 
     @Autowired
-    private PaymentService paymentService;
+    private PaymentService paymentService; // Mantenido
 
     @Autowired
     private PetRepository petRepository;
@@ -43,8 +41,8 @@ public class PetController {
 
     /**
      * 📸 Registrar mascota y plan del usuario
-     * 💡 Lógica actualizada: Para el plan PREMIUM, ahora devuelve una URL de redirección
-     * de la pasarela de pagos (PaymentResponse).
+     * 💡 Lógica actualizada: Para el plan PREMIUM, ya no llama a un redirect, sino que indica
+     * el endpoint al que debe llamar el frontend para procesar el pago (con datos de tarjeta).
      */
     @PostMapping(
             value = "/{userId}/register",
@@ -85,25 +83,23 @@ public class PetController {
             pet.setUser(user);
             petService.save(pet); // <--- Mascota registrada
 
-            Map<String, Object> responseData = new HashMap<>();
-            responseData.put("petId", pet.getId());
-            responseData.put("planType", planType);
-
-            // 💡 LÓGICA DE PAGO ACTUALIZADA: Devolver la URL de la pasarela
+            // 💡 LÓGICA DE PAGO ACTUALIZADA: Devolver un mensaje de éxito/instrucción
             if (planType.equalsIgnoreCase("premium")) {
-                // Inicia la transacción y obtiene el objeto de respuesta de pago (PaymentResponse)
-                PaymentResponse paymentResponse = paymentService.createPaymentRedirect(userId); // 💡 CORRECCIÓN: Usar el tipo PaymentResponse
-
-                // El frontend recibirá el objeto con la URL de redirección
-                return ResponseEntity.ok(paymentResponse);
+                // Devolver la instrucción para que el frontend pida los datos de tarjeta y llame al endpoint de proceso.
+                return ResponseEntity.status(HttpStatus.CREATED)
+                        .body(Map.of(
+                                "message", "Mascota registrada. Procesa el pago para activar PREMIUM.",
+                                "planType", "PENDING_PREMIUM",
+                                "petId", pet.getId(),
+                                "nextStepEndpoint", "/api/payment/process/" + userId
+                        ));
             } else {
                 // Si es FREE, actualiza el plan y devuelve el mensaje estructurado
                 user.setPlan("FREE");
                 userRepository.save(user);
 
-                // Si es FREE, devuelve un mensaje simple con estructura JSON
                 return ResponseEntity.status(HttpStatus.CREATED)
-                        .body(Map.of("message", "Mascota registrada con plan FREE", "planType", "FREE"));
+                        .body(Map.of("message", "Mascota registrada con plan FREE", "planType", "FREE", "petId", pet.getId()));
             }
 
         } catch (IOException e) {

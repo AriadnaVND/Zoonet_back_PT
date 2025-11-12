@@ -2,6 +2,7 @@ package com.tecsup.pe.back_zonet.controller.auth;
 
 import com.tecsup.pe.back_zonet.entity.Subscription;
 import com.tecsup.pe.back_zonet.service.auth.PaymentService;
+import com.tecsup.pe.back_zonet.dto.PaymentRequest; // 💡 AGREGADO
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,12 +15,26 @@ public class PaymentController {
     private PaymentService paymentService;
 
     /**
-     * 🟢 Endpoint de Confirmación de Pago (Webhook Simulado)
-     * Resuelve el error de makePremiumPayment al usar el nuevo flujo.
+     * 🟢 NUEVO ENDPOINT: POST /api/payment/process/{userId}
+     * Simula la pasarela de pago recibiendo los datos de la tarjeta y valida formato.
      */
-    @PostMapping("/confirm/{userId}") // 💡 CORRECCIÓN: Ruta para la confirmación del pago
-    public ResponseEntity<Subscription> confirmPremiumPayment(@PathVariable Long userId) { // 💡 CORRECCIÓN: Nombre de método
-        // 💡 CORRECCIÓN: Llama al método que completa la transacción
+    @PostMapping("/process/{userId}")
+    public ResponseEntity<?> processPayment(@PathVariable Long userId, @RequestBody PaymentRequest request) {
+        try {
+            Subscription subscription = paymentService.processPremiumPayment(userId, request);
+            return ResponseEntity.ok(subscription);
+        } catch (RuntimeException e) {
+            // Devuelve error de validación de formato (ej. 16 dígitos, 3 CVV)
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+
+    /**
+     * 🟢 Endpoint de Confirmación de Pago (Webhook Simulado) - Mantenido.
+     */
+    @PostMapping("/confirm/{userId}")
+    public ResponseEntity<Subscription> confirmPremiumPayment(@PathVariable Long userId) {
         Subscription subscription = paymentService.completePremiumPayment(userId);
         return ResponseEntity.ok(subscription);
     }

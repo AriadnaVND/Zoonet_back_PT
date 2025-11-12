@@ -4,13 +4,16 @@ import com.tecsup.pe.back_zonet.entity.Subscription;
 import com.tecsup.pe.back_zonet.entity.User;
 import com.tecsup.pe.back_zonet.repository.SubscriptionRepository;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
+import com.tecsup.pe.back_zonet.service.user.SubscriptionService; // <-- NUEVO
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus; // <-- NUEVO
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional; // <-- NUEVO
 
 @RestController
 @RequestMapping("/api/subscriptions")
@@ -21,6 +24,31 @@ public class SubscriptionController {
 
     @Autowired
     private SubscriptionRepository subscriptionRepository;
+
+    @Autowired // <-- NUEVO
+    private SubscriptionService subscriptionService; // <-- NUEVO
+
+    /**
+     * 🟢 NUEVO ENDPOINT: GET /api/subscriptions/{userId}
+     * Obtener plan actual y fechas.
+     */
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> getSubscriptionStatus(@PathVariable Long userId) {
+        try {
+            Optional<Subscription> subscription = subscriptionService.getCurrentSubscription(userId);
+
+            if (subscription.isPresent()) {
+                // Devuelve el objeto Subscription completo si existe
+                return ResponseEntity.ok(subscription.get());
+            } else {
+                // Si no hay un objeto Subscription (es decir, es Plan Free o no tiene suscripción registrada)
+                return ResponseEntity.ok(Map.of("plan", "FREE", "message", "No hay suscripción activa (Plan Free)"));
+            }
+        } catch (RuntimeException e) {
+            // Maneja el error de 'Usuario no encontrado'
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+    }
 
     @PostMapping("/{userId}")
     public ResponseEntity<?> selectPlan(
