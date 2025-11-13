@@ -16,19 +16,18 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.transaction.annotation.Transactional; // Import para gestión de Lazy Loading
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Servicio de matching con IA usando Gemini
- * Analiza imágenes de mascotas y las compara con posts de la comunidad
- */
 @Slf4j
 @Service
 public class AiMatchingService {
@@ -46,26 +45,18 @@ public class AiMatchingService {
     private GeminiConfig geminiConfig;
 
     private static final int MAX_POSTS_TO_COMPARE = 50;
-    private static final String MODEL = "gemini-2.5-flash"; // Modelo actualizado y con cuota
+    private static final String MODEL = "gemini-2.5-flash"; // ✅ Modelo confirmado funcionando con curl
 
-    /**
-     * Encuentra coincidencias de mascotas usando análisis de IA
-     *
-     * @param userId ID del usuario (debe ser Premium)
-     * @param imageBytes Bytes de la imagen subida
-     * @param mimeType Tipo MIME de la imagen
-     * @return Lista de coincidencias ordenadas por porcentaje
-     */
-    @Transactional // CLAVE: Mantiene la sesión de DB abierta para evitar LazyInitializationException
+    @Transactional
     public List<AiMatchResultDTO> findMatches(Long userId, byte[] imageBytes, String mimeType) throws IOException {
 
         // 1. Validación de rol Premium
         log.info("Verificando rol Premium para usuario: {}", userId);
-        /* // COMENTADO: Esto elimina la causa directa del error 403 Forbidden
+        // ✅ RESTRICCIÓN PREMIUM HABILITADA
         if (roleValidator.isFreeUser(userId)) {
             throw new RuntimeException("Funcionalidad restringida: AI Matching es solo para usuarios Premium.");
         }
-        */
+        // FIN RESTRICCIÓN PREMIUM
 
         // 2. Codificar imagen
         String base64Image = Base64.getEncoder().encodeToString(imageBytes);
@@ -73,8 +64,6 @@ public class AiMatchingService {
 
         // 3. Obtener posts para comparar
         log.info("Obteniendo posts de la comunidad...");
-
-        // 🚨 USO DEL NUEVO MÉTODO CON JOIN FETCH (de CommunityRepository)
         List<CommunityPost> postsToCompare = communityRepository.findAllWithDetailsOrderByCreatedAtDesc().stream()
                 .filter(post -> "LOST_ALERT".equals(post.getPostType()) || "SIGHTING".equals(post.getPostType()))
                 .limit(MAX_POSTS_TO_COMPARE)
@@ -88,86 +77,99 @@ public class AiMatchingService {
 
         // 4. Construir contexto
         log.info("Construyendo contexto de comparación...");
-
         String comparisonContext;
         try {
             comparisonContext = postsToCompare.stream()
                     .map(post -> {
-                        // Aseguramos que los valores sean Strings antes de sanearlos
                         String location = (post.getLocationName() != null) ? post.getLocationName() : "Ubicación Desconocida";
                         String description = (post.getDescription() != null) ? post.getDescription() : "Sin descripción";
-
-                        // Aplicamos sanitizeText a ambos campos para evitar roturas de JSON
                         return String.format(
                                 "{ \"id\": %d, \"location\": \"%s\", \"description\": \"%s\" }",
                                 post.getId(),
-                                sanitizeText(location), // Sanear Ubicación
-                                sanitizeText(description) // Sanear Descripción
+                                sanitizeText(location),
+                                sanitizeText(description)
                         );
                     })
                     .collect(Collectors.joining(",\n"));
-
             log.info("Contexto construido exitosamente.");
-
         } catch (Exception contextEx) {
-            // Este catch aísla cualquier NPE/error de mapeo en la construcción del prompt
-            log.error("ERROR CRÍTICO: Fallo al construir el contexto de comparación JSON. Esto podría indicar un problema en una entidad.", contextEx);
+            log.error("ERROR CRÍTICO: Fallo al construir el contexto de comparación JSON.", contextEx);
             throw new IOException("Error al preparar los datos de la comunidad para la IA.", contextEx);
         }
 
-        // 5. Crear prompt optimizado
-        String promptText = String.format(
-                """
-                Analiza la imagen de la mascota y compárala con estas mascotas reportadas.
-                
-                Criterios de comparación:
-                - Raza o especie (perro, gato, etc.)
-                - Color del pelaje
-                - Patrón y marcas distintivas
-                - Tamaño y complexión
-                
-                Mascotas en la comunidad:
-                [
-                %s
-                ]
-                
-                IMPORTANTE: Responde ÚNICAMENTE con un array JSON válido (sin texto adicional ni markdown).
-                
-                Formato exacto:
-                [
-                  { "postId": 123, "matchPercentage": 95, "aiReasoning": "Coincide en raza y color..." },
-                  { "postId": 456, "matchPercentage": 87, "aiReasoning": "Similar patrón de pelaje..." },
-                  { "postId": 789, "matchPercentage": 72, "aiReasoning": "Misma raza, diferente color..." }
-                ]
-                
-                Devuelve los 3 mejores matches ordenados por porcentaje (de mayor a menor).
-                Si NO hay coincidencias buenas (ninguno >= 50%), devuelve un array vacío: [].
-                """, comparisonContext
-        );
+        // 5. Comparar imagen con cada post individualmente
+        log.info("Iniciando comparación individual con cada post...");
+        List<AiMatchResultDTO> allMatches = new ArrayList<>();
 
-        // 6. Construir request para Gemini
-        log.info("Construyendo request para Gemini...");
-        GeminiRequest request = buildGeminiRequest(base64Image, mimeType, promptText);
+        for (CommunityPost post : postsToCompare) {
+            try {
+                // Leer la imagen del post desde el sistema de archivos
+                byte[] postImageBytes = readImageFromPost(post);
+                if (postImageBytes == null) {
+                    // log.warn("No se pudo leer la imagen del post {}", post.getId()); // Ya se registra el warning en el método
+                    continue;
+                }
 
-        // 7. Llamar a Gemini API con reintentos
-        log.info("Llamando a Gemini API...");
-        String jsonResponse = callGeminiApiWithRetry(request);
+                // Codificar imagen del post en Base64
+                String postBase64Image = Base64.getEncoder().encodeToString(postImageBytes);
 
-        // 8. Manejar respuesta vacía explícitamente (si Gemini devuelve "[]")
-        String cleanJson = jsonResponse.trim()
-                .replaceFirst("^```json\\s*", "")
-                .replaceFirst("```\\s*$", "")
-                .trim();
+                // Crear prompt para comparación uno a uno
+                String promptText = String.format(
+                        """
+                        Compara estas dos imágenes de mascotas y determina el porcentaje de similitud.
+                        
+                        Primera imagen: La mascota que se está buscando.
+                        Segunda imagen: Post #%d - %s en %s
+                        
+                        Criterios de comparación:
+                        - Raza o especie (perro, gato, etc.)
+                        - Color del pelaje
+                        - Patrón y marcas distintivas
+                        - Tamaño y complexión
+                        - Características faciales
+                        
+                        IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON (sin texto adicional ni markdown).
+                        
+                        Formato exacto:
+                        { "postId": %d, "matchPercentage": 85, "aiReasoning": "Explicación detallada..." }
+                        
+                        Si las imágenes NO son de la misma mascota o similitud < 10%%, responde:
+                        { "postId": %d, "matchPercentage": 0, "aiReasoning": "Sin similitud significativa" }
+                        """,
+                        post.getId(),
+                        post.getDescription() != null ? post.getDescription() : "Mascota reportada",
+                        post.getLocationName() != null ? post.getLocationName() : "Ubicación desconocida",
+                        post.getId(),
+                        post.getId()
+                );
 
-        if (cleanJson.equals("[]")) {
-            log.info("Gemini no encontró coincidencias relevantes (<= 50%) según el prompt.");
-            return Collections.emptyList();
+                log.info("Comparando con post {}...", post.getId());
+
+                // Construir request con AMBAS imágenes
+                GeminiRequest request = buildGeminiRequestWithTwoImages(
+                        base64Image, postBase64Image, mimeType, promptText
+                );
+
+                // Llamar a Gemini
+                String jsonResponse = callGeminiApiWithRetry(request);
+
+                // Parsear respuesta individual
+                AiMatchResultDTO match = parseSingleMatchResponse(jsonResponse);
+
+                if (match != null && match.getMatchPercentage() >= 10) {
+                    allMatches.add(match);
+                    log.info("Match encontrado con post {}: {}%", post.getId(), match.getMatchPercentage());
+                }
+
+            } catch (Exception e) {
+                log.error("Error al comparar con post {}: {}", post.getId(), e.getMessage());
+            }
         }
 
-        // 9. Parsear respuesta (usando el JSON ya limpiado)
-        log.info("Parseando respuesta de Gemini...");
-        List<AiMatchResultDTO> matches = parseGeminiResponse(jsonResponse);
-        log.info("Matches encontrados (sin filtrar): {}", matches.size());
+        log.info("Comparación completada. Total de matches: {}", allMatches.size());
+
+        // 9. No hay parseGeminiResponse aquí porque ya procesamos individualmente
+        List<AiMatchResultDTO> matches = allMatches;
 
         // 10. Enriquecer resultados
         try {
@@ -178,9 +180,9 @@ public class AiMatchingService {
             throw new IOException("Fallo al procesar datos de la comunidad para enriquecer resultados.", dbEx);
         }
 
-        // 11. Filtrar y ordenar
+        // 11. Filtrar y ordenar (umbral reducido a 10% para mejor UX)
         List<AiMatchResultDTO> finalMatches = matches.stream()
-                .filter(m -> m.getMatchPercentage() != null && m.getMatchPercentage() >= 50)
+                .filter(m -> m.getMatchPercentage() != null && m.getMatchPercentage() >= 10)
                 .sorted((a, b) -> Integer.compare(b.getMatchPercentage(), a.getMatchPercentage()))
                 .limit(3)
                 .collect(Collectors.toList());
@@ -189,30 +191,106 @@ public class AiMatchingService {
         return finalMatches;
     }
 
-    private GeminiRequest buildGeminiRequest(String base64Image, String mimeType, String promptText) {
-        // Parte de imagen
-        GeminiRequest.InlineData imageData = new GeminiRequest.InlineData(mimeType, base64Image);
-        GeminiRequest.Part imagePart = new GeminiRequest.Part(null, imageData);
+    // El método buildGeminiRequest sin la segunda imagen se elimina o se usa el nuevo.
+    // El método buildGeminiRequestWithTwoImages se mantiene.
+
+    private GeminiRequest buildGeminiRequestWithTwoImages(String base64Image1, String base64Image2, String mimeType, String promptText) {
+        // Primera imagen (la que busca el usuario)
+        GeminiRequest.InlineData imageData1 = new GeminiRequest.InlineData(mimeType, base64Image1);
+        GeminiRequest.Part imagePart1 = new GeminiRequest.Part(null, imageData1);
+
+        // Segunda imagen (del post en la comunidad)
+        GeminiRequest.InlineData imageData2 = new GeminiRequest.InlineData(mimeType, base64Image2);
+        GeminiRequest.Part imagePart2 = new GeminiRequest.Part(null, imageData2);
 
         // Parte de texto
         GeminiRequest.Part textPart = new GeminiRequest.Part(promptText, null);
 
-        // Content con ambas partes
-        GeminiRequest.Content content = new GeminiRequest.Content(Arrays.asList(imagePart, textPart));
+        // Content con todas las partes
+        GeminiRequest.Content content = new GeminiRequest.Content(
+                Arrays.asList(textPart, imagePart1, imagePart2)
+        );
 
-        // Config de generación
         GeminiRequest.GenerationConfig config = new GeminiRequest.GenerationConfig(
-                0.3,                    // Temperature baja para respuestas consistentes
-                "application/json",     // Queremos JSON
-                2048                    // Suficientes tokens para la respuesta
+                0.3,
+                "application/json",
+                2048
         );
 
         return new GeminiRequest(Collections.singletonList(content), config);
     }
 
-    // =========================================================================
-    // Lógica de Reintentos y Llamadas a API
-    // =========================================================================
+    private byte[] readImageFromPost(CommunityPost post) {
+        try {
+            if (post.getImageUrl() == null || post.getImageUrl().isEmpty()) {
+                return null;
+            }
+
+            // La imageUrl tiene formato: /uploads/filename.jpg
+            String imagePath = post.getImageUrl();
+
+            // 1. Remover el prefijo '/' si existe
+            if (imagePath.startsWith("/")) {
+                imagePath = imagePath.substring(1);
+            }
+
+            // 2. Intentar buscar la ruta relativa al directorio de trabajo (ROOT DIR)
+            Path fullPath = Paths.get(imagePath);
+
+            if (!Files.exists(fullPath)) {
+                // 3. Si falla, intentar buscar la ruta absoluta usando el working directory
+                fullPath = Paths.get(System.getProperty("user.dir"), imagePath);
+
+                if (!Files.exists(fullPath)) {
+                    log.warn("Archivo no encontrado en ninguna ruta: {}", imagePath);
+                    return null;
+                }
+            }
+
+            return Files.readAllBytes(fullPath);
+
+        } catch (Exception e) {
+            log.error("Error al leer imagen del post {}: {}", post.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    private AiMatchResultDTO parseSingleMatchResponse(String jsonResponse) throws IOException {
+        try {
+            String cleanJson = jsonResponse.trim()
+                    .replaceFirst("^```json\\s*", "")
+                    .replaceFirst("```\\s*$", "")
+                    .trim();
+
+            log.debug("JSON limpio individual: {}", cleanJson);
+
+            Gson gson = new Gson();
+            AiMatchResultDTO match = gson.fromJson(cleanJson, AiMatchResultDTO.class);
+
+            if (match == null) {
+                return null;
+            }
+
+            if (match.getPostId() == null) {
+                throw new IllegalStateException("postId es requerido en la respuesta de la IA.");
+            }
+            if (match.getMatchPercentage() == null) {
+                match.setMatchPercentage(0);
+            }
+            if (match.getMatchPercentage() < 0 || match.getMatchPercentage() > 100) {
+                match.setMatchPercentage(0);
+            }
+            if (match.getAiReasoning() == null || match.getAiReasoning().isBlank()) {
+                match.setAiReasoning("Sin justificación proporcionada");
+            }
+
+            return match;
+
+        } catch (JsonSyntaxException e) {
+            log.error("Error al parsear JSON individual de Gemini. Respuesta: {}", jsonResponse);
+            throw new IOException("Respuesta inválida de Gemini: " + e.getMessage(), e);
+        }
+    }
 
     private String callGeminiApiWithRetry(GeminiRequest request) throws IOException {
         final int MAX_RETRIES = 3;
@@ -221,9 +299,12 @@ public class AiMatchingService {
                 log.info("Intento {}/{} - Llamando a Gemini API...", attempt, MAX_RETRIES);
                 return callGeminiApi(request);
             } catch (HttpClientErrorException e) {
+                // ✅ MEJORADO: Capturar el cuerpo de la respuesta de error
+                log.error("Error HTTP al llamar a Gemini API. Status: {}, Body: {}",
+                        e.getStatusCode(), e.getResponseBodyAsString());
+
                 if (e.getStatusCode().is4xxClientError() && e.getStatusCode() != HttpStatus.TOO_MANY_REQUESTS) {
-                    log.error("Error no reintentable (4xx): {}", e.getMessage());
-                    throw new IOException("Error de cliente en la API: " + e.getMessage(), e);
+                    throw new IOException("Error de cliente en la API de Gemini: " + e.getResponseBodyAsString(), e);
                 }
                 if (attempt < MAX_RETRIES) {
                     long delay = 2000L * attempt;
@@ -235,13 +316,13 @@ public class AiMatchingService {
                         throw new IOException("Proceso interrumpido durante el backoff.", interruptedException);
                     }
                 } else {
-                    log.error("Fallo después de {} intentos.", MAX_RETRIES);
                     throw new IOException("Fallo la llamada a Gemini API después de múltiples reintentos.", e);
                 }
             } catch (Exception e) {
+                log.error("Error inesperado al llamar a Gemini API: {}", e.getMessage(), e);
                 if (attempt < MAX_RETRIES) {
                     long delay = 2000L * attempt;
-                    log.warn("Error de conexión/timeout. Reintentando en {}ms...", delay);
+                    log.warn("Reintentando en {}ms...", delay);
                     try {
                         Thread.sleep(delay);
                     } catch (InterruptedException interruptedException) {
@@ -249,7 +330,6 @@ public class AiMatchingService {
                         throw new IOException("Proceso interrumpido durante el backoff.", interruptedException);
                     }
                 } else {
-                    log.error("Error al llamar a Gemini API: {}", e.getMessage(), e);
                     throw new IOException("Error en llamada a Gemini: " + e.getMessage(), e);
                 }
             }
@@ -260,40 +340,46 @@ public class AiMatchingService {
     private String callGeminiApi(GeminiRequest request) throws IOException {
         String url = geminiConfig.getApiUrl() + MODEL + ":generateContent?key=" + geminiConfig.getApiKey();
 
+        // ✅ LOG AGREGADO
+        log.info("URL de Gemini API: {}", url.replace(geminiConfig.getApiKey(), "***API_KEY***"));
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<GeminiRequest> entity = new HttpEntity<>(request, headers);
 
-        ResponseEntity<GeminiResponse> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                entity,
-                GeminiResponse.class
-        );
+        try {
+            ResponseEntity<GeminiResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    GeminiResponse.class
+            );
 
-        if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-            GeminiResponse geminiResponse = response.getBody();
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                GeminiResponse geminiResponse = response.getBody();
 
-            if (geminiResponse.getCandidates() != null && !geminiResponse.getCandidates().isEmpty()) {
-                String text = geminiResponse.getCandidates().get(0).getContent().getParts().get(0).getText();
+                if (geminiResponse.getCandidates() != null && !geminiResponse.getCandidates().isEmpty()) {
+                    String text = geminiResponse.getCandidates().get(0).getContent().getParts().get(0).getText();
 
-                if (geminiResponse.getUsageMetadata() != null) {
-                    log.info("Tokens usados - Total: {}, Prompt: {}, Response: {}",
-                            geminiResponse.getUsageMetadata().getTotalTokenCount(),
-                            geminiResponse.getUsageMetadata().getPromptTokenCount(),
-                            geminiResponse.getUsageMetadata().getCandidatesTokenCount());
+                    if (geminiResponse.getUsageMetadata() != null) {
+                        log.info("Tokens usados - Total: {}, Prompt: {}, Response: {}",
+                                geminiResponse.getUsageMetadata().getTotalTokenCount(),
+                                geminiResponse.getUsageMetadata().getPromptTokenCount(),
+                                geminiResponse.getUsageMetadata().getCandidatesTokenCount());
+                    }
+
+                    return text;
                 }
-
-                return text;
             }
+            throw new IOException("Respuesta vacía o incompleta de Gemini API");
+        } catch (HttpClientErrorException e) {
+            // ✅ MEJORADO: Re-lanzar con más contexto
+            log.error("Error HTTP: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw e;
         }
-        throw new IOException("Respuesta vacía o incompleta de Gemini API");
     }
 
-    /**
-     * Parsea la respuesta JSON de Gemini con validación robusta
-     */
     private List<AiMatchResultDTO> parseGeminiResponse(String jsonResponse) throws IOException {
         try {
             String cleanJson = jsonResponse.trim()
@@ -301,6 +387,7 @@ public class AiMatchingService {
                     .replaceFirst("```\\s*$", "")
                     .trim();
 
+            log.info("JSON limpio para parsear. Longitud: {} caracteres", cleanJson.length());
             log.debug("JSON limpio: {}", cleanJson);
 
             Gson gson = new Gson();
@@ -321,7 +408,7 @@ public class AiMatchingService {
                     match.setMatchPercentage(0);
                 }
                 if (match.getMatchPercentage() < 0 || match.getMatchPercentage() > 100) {
-                    log.warn("matchPercentage fuera de rango (0-100) para postId: {}. Estableciendo a 0.", match.getPostId());
+                    log.warn("matchPercentage fuera de rango para postId: {}", match.getPostId());
                     match.setMatchPercentage(0);
                 }
                 if (match.getAiReasoning() == null || match.getAiReasoning().isBlank()) {
@@ -332,14 +419,11 @@ public class AiMatchingService {
             return matches;
 
         } catch (JsonSyntaxException e) {
-            log.error("Error al parsear JSON de Gemini. Respuesta: {}", jsonResponse);
+            log.error("Error al parsear JSON de Gemini. Respuesta recibida: {}", jsonResponse);
             throw new IOException("Respuesta inválida de Gemini (Error de formato JSON): " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Enriquece los matches con datos completos de la base de datos
-     */
     private void enrichMatchResults(List<AiMatchResultDTO> matches, List<CommunityPost> posts) {
         Map<Long, CommunityPost> postMap = posts.stream()
                 .collect(Collectors.toMap(CommunityPost::getId, p -> p));
@@ -350,7 +434,6 @@ public class AiMatchingService {
                 match.setImageUrl(post.getImageUrl() != null ? post.getImageUrl() : "");
                 match.setLocationName(post.getLocationName() != null ? post.getLocationName() : "Ubicación Desconocida");
                 match.setDescription(post.getDescription() != null ? post.getDescription() : "Sin descripción");
-
                 match.setPetName(extractPetName(post));
                 match.setTimeAgo(calculateTimeAgo(post.getCreatedAt()));
             } else {
@@ -359,11 +442,7 @@ public class AiMatchingService {
         }
     }
 
-    /**
-     * Extrae el nombre de la mascota del post (funcionalidad de soporte para posts de tipo LOST_ALERT)
-     */
     private String extractPetName(CommunityPost post) {
-
         if ("SIGHTING".equals(post.getPostType())) {
             return "Avistamiento";
         }
@@ -380,9 +459,6 @@ public class AiMatchingService {
         return "Mascota Perdida";
     }
 
-    /**
-     * Calcula el tiempo transcurrido desde la creación del post
-     */
     private String calculateTimeAgo(LocalDateTime createdAt) {
         if (createdAt == null) return "Fecha desconocida";
 
@@ -397,9 +473,6 @@ public class AiMatchingService {
         return "Perdido hace un momento";
     }
 
-    /**
-     * Limpia el texto para evitar problemas con JSON
-     */
     private String sanitizeText(String text) {
         if (text == null) return "";
         return text.replace("\"", "'")
