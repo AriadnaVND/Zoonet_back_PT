@@ -45,18 +45,18 @@ public class AiMatchingService {
     private GeminiConfig geminiConfig;
 
     private static final int MAX_POSTS_TO_COMPARE = 50;
-    private static final String MODEL = "gemini-2.5-flash"; // ✅ Modelo confirmado funcionando con curl
+    private static final String MODEL = "gemini-2.5-flash";
+
+    private static final int MIN_MATCH_PERCENTAGE = 40; // 🛑 NUEVO UMBRAL MÍNIMO DEL 40%
 
     @Transactional
     public List<AiMatchResultDTO> findMatches(Long userId, byte[] imageBytes, String mimeType) throws IOException {
 
         // 1. Validación de rol Premium
         log.info("Verificando rol Premium para usuario: {}", userId);
-        // ✅ RESTRICCIÓN PREMIUM HABILITADA
         if (roleValidator.isFreeUser(userId)) {
             throw new RuntimeException("Funcionalidad restringida: AI Matching es solo para usuarios Premium.");
         }
-        // FIN RESTRICCIÓN PREMIUM
 
         // 2. Codificar imagen
         String base64Image = Base64.getEncoder().encodeToString(imageBytes);
@@ -66,7 +66,7 @@ public class AiMatchingService {
         log.info("Obteniendo posts de la comunidad...");
         List<CommunityPost> postsToCompare = communityRepository.findAllWithDetailsOrderByCreatedAtDesc().stream()
                 .filter(post -> "LOST_ALERT".equals(post.getPostType()) || "SIGHTING".equals(post.getPostType()))
-                .limit(MAX_POSTS_TO_COMPARE)
+                // LÍMITE ELIMINADO: Analiza todos los posts relevantes.
                 .collect(Collectors.toList());
 
         if (postsToCompare.isEmpty()) {
@@ -75,7 +75,7 @@ public class AiMatchingService {
         }
         log.info("Posts encontrados para comparar: {}", postsToCompare.size());
 
-        // 4. Construir contexto
+        // 4. Construir contexto (sin cambios funcionales)
         log.info("Construyendo contexto de comparación...");
         String comparisonContext;
         try {
@@ -103,14 +103,11 @@ public class AiMatchingService {
 
         for (CommunityPost post : postsToCompare) {
             try {
-                // Leer la imagen del post desde el sistema de archivos
                 byte[] postImageBytes = readImageFromPost(post);
                 if (postImageBytes == null) {
-                    // log.warn("No se pudo leer la imagen del post {}", post.getId()); // Ya se registra el warning en el método
                     continue;
                 }
 
-                // Codificar imagen del post en Base64
                 String postBase64Image = Base64.getEncoder().encodeToString(postImageBytes);
 
                 // Crear prompt para comparación uno a uno
@@ -133,30 +130,29 @@ public class AiMatchingService {
                         Formato exacto:
                         { "postId": %d, "matchPercentage": 85, "aiReasoning": "Explicación detallada..." }
                         
-                        Si las imágenes NO son de la misma mascota o similitud < 10%%, responde:
+                        Si las imágenes NO son de la misma mascota o similitud < %d%%, responde: 
                         { "postId": %d, "matchPercentage": 0, "aiReasoning": "Sin similitud significativa" }
                         """,
                         post.getId(),
                         post.getDescription() != null ? post.getDescription() : "Mascota reportada",
                         post.getLocationName() != null ? post.getLocationName() : "Ubicación desconocida",
                         post.getId(),
+                        MIN_MATCH_PERCENTAGE, // 🛑 NUEVO UMBRAL EN EL PROMPT
                         post.getId()
                 );
 
                 log.info("Comparando con post {}...", post.getId());
 
-                // Construir request con AMBAS imágenes
                 GeminiRequest request = buildGeminiRequestWithTwoImages(
                         base64Image, postBase64Image, mimeType, promptText
                 );
 
-                // Llamar a Gemini
                 String jsonResponse = callGeminiApiWithRetry(request);
 
-                // Parsear respuesta individual
                 AiMatchResultDTO match = parseSingleMatchResponse(jsonResponse);
 
-                if (match != null && match.getMatchPercentage() >= 10) {
+                // 🛑 APLICAR EL FILTRO: Solo si es >= 40%
+                if (match != null && match.getMatchPercentage() >= MIN_MATCH_PERCENTAGE) {
                     allMatches.add(match);
                     log.info("Match encontrado con post {}: {}%", post.getId(), match.getMatchPercentage());
                 }
@@ -168,10 +164,9 @@ public class AiMatchingService {
 
         log.info("Comparación completada. Total de matches: {}", allMatches.size());
 
-        // 9. No hay parseGeminiResponse aquí porque ya procesamos individualmente
         List<AiMatchResultDTO> matches = allMatches;
 
-        // 10. Enriquecer resultados
+        // 10. Enriquecer resultados (sin cambios funcionales)
         try {
             log.info("Enriqueciendo resultados con datos de BD...");
             enrichMatchResults(matches, postsToCompare);
@@ -180,9 +175,10 @@ public class AiMatchingService {
             throw new IOException("Fallo al procesar datos de la comunidad para enriquecer resultados.", dbEx);
         }
 
-        // 11. Filtrar y ordenar (umbral reducido a 10% para mejor UX)
+        // 11. Filtrar y ordenar
         List<AiMatchResultDTO> finalMatches = matches.stream()
-                .filter(m -> m.getMatchPercentage() != null && m.getMatchPercentage() >= 10)
+                // 🛑 APLICAR EL FILTRO FINAL: Solo si es >= 40%
+                .filter(m -> m.getMatchPercentage() != null && m.getMatchPercentage() >= MIN_MATCH_PERCENTAGE)
                 .sorted((a, b) -> Integer.compare(b.getMatchPercentage(), a.getMatchPercentage()))
                 .limit(3)
                 .collect(Collectors.toList());
@@ -191,9 +187,8 @@ public class AiMatchingService {
         return finalMatches;
     }
 
-    // El método buildGeminiRequest sin la segunda imagen se elimina o se usa el nuevo.
-    // El método buildGeminiRequestWithTwoImages se mantiene.
-
+    // [Resto de métodos (buildGeminiRequestWithTwoImages, readImageFromPost, parseSingleMatchResponse, callGeminiApiWithRetry, callGeminiApi, parseGeminiResponse, enrichMatchResults, extractPetName, calculateTimeAgo, sanitizeText) se mantienen sin cambios sustanciales, incluyendo los logs de debug que se introdujeron para readImageFromPost]
+    // ...
     private GeminiRequest buildGeminiRequestWithTwoImages(String base64Image1, String base64Image2, String mimeType, String promptText) {
         // Primera imagen (la que busca el usuario)
         GeminiRequest.InlineData imageData1 = new GeminiRequest.InlineData(mimeType, base64Image1);
@@ -234,6 +229,9 @@ public class AiMatchingService {
                 imagePath = imagePath.substring(1);
             }
 
+            // 🚨 NUEVO LOG: Muestra la ruta relativa que se está buscando
+            log.info("Intentando leer imagen para post {}. Ruta relativa esperada: {}", post.getId(), imagePath);
+
             // 2. Intentar buscar la ruta relativa al directorio de trabajo (ROOT DIR)
             Path fullPath = Paths.get(imagePath);
 
@@ -242,11 +240,14 @@ public class AiMatchingService {
                 fullPath = Paths.get(System.getProperty("user.dir"), imagePath);
 
                 if (!Files.exists(fullPath)) {
-                    log.warn("Archivo no encontrado en ninguna ruta: {}", imagePath);
+                    // 🚨 NUEVO LOG: Muestra la ruta absoluta final que no se encontró
+                    log.warn("Archivo de imagen NO encontrado para post {} en las rutas. Ruta absoluta final probada: {}", post.getId(), fullPath.toAbsolutePath().toString());
                     return null;
                 }
             }
 
+            // 🚨 NUEVO LOG: Muestra la ruta absoluta desde donde se leyó la imagen (confirmación)
+            log.info("Imagen de post {} leída exitosamente desde: {}", post.getId(), fullPath.toAbsolutePath().toString());
             return Files.readAllBytes(fullPath);
 
         } catch (Exception e) {

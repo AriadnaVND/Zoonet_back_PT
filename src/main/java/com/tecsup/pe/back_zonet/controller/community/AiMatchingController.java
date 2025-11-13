@@ -72,7 +72,8 @@ public class AiMatchingController {
                 log.info("No se encontraron coincidencias para el usuario {}", userId);
                 Map<String, Object> response = new HashMap<>();
                 response.put("matches", matches);
-                response.put("message", "No se encontraron coincidencias con un porcentaje mayor al 10%. Intenta con una imagen diferente.");
+                // 🛑 CAMBIO: El mensaje ahora menciona el 40%
+                response.put("message", "No se encontraron coincidencias con un porcentaje mayor al 40%. Intenta con una imagen diferente.");
                 response.put("totalAnalyzed", "Se analizaron todas las mascotas reportadas en la comunidad");
                 return ResponseEntity.ok(response);
             }
