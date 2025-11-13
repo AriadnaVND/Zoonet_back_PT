@@ -18,7 +18,6 @@ public class Location {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Relación a la mascota cuya ubicación estamos registrando
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pet_id", nullable = false)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
@@ -28,6 +27,8 @@ public class Location {
     private double longitude;
     private LocalDateTime timestamp = LocalDateTime.now();
 
-    // Campo para registrar si el rastreo es en tiempo real (solo Premium)
     private boolean isRealTime = false;
+
+    // 💡 NUEVO CAMPO
+    private Double batteryLevel;
 }

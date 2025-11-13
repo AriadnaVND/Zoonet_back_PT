@@ -2,9 +2,10 @@ package com.tecsup.pe.back_zonet.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // ❗ AÑADIR
-import com.fasterxml.jackson.annotation.JsonIgnore; // ⚠️ AÑADIDO
-import java.util.List; // ⚠️ AÑADIDO
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.List;
+import java.time.LocalDate; // 💡 IMPORTADO
 
 @Entity
 @Table(name = "pets")
@@ -17,16 +18,18 @@ public class Pet {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name; // nombre de la mascota
-    private String photoUrl; // URL o nombre del archivo de la foto
+    private String name;
+    private String photoUrl;
 
-    @ManyToOne(fetch = FetchType.LAZY) // Asumiendo que es LAZY
+    // 💡 NUEVO CAMPO para Recordatorio de Vacunación
+    private LocalDate nextVaccinationDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) // ❗ CORRECCIÓN CLAVE
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User user;
 
-    // 🟢 CORRECCIÓN CLAVE: Si se elimina la Pet, se eliminan los LostPet asociados.
     @OneToMany(mappedBy = "pet", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonIgnore // Oculta la lista en el JSON de Pet para evitar ciclos de serialización
+    @JsonIgnore
     private List<LostPet> lostPetReports;
 }

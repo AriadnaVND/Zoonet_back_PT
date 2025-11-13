@@ -7,4 +7,7 @@ public class LocationReportDTO {
     private Long petId;
     private double latitude;
     private double longitude;
+
+    // 💡 NUEVO CAMPO
+    private Double batteryLevel;
 }
