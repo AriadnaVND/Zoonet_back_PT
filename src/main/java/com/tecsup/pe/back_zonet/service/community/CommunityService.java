@@ -1,6 +1,7 @@
 package com.tecsup.pe.back_zonet.service.community;
 
 import com.tecsup.pe.back_zonet.dto.CommentDTO;
+import com.tecsup.pe.back_zonet.dto.ContactRequest; // 🟢 NUEVO
 import com.tecsup.pe.back_zonet.dto.ReactionDTO;
 import com.tecsup.pe.back_zonet.entity.Comment;
 import com.tecsup.pe.back_zonet.entity.CommunityPost;
@@ -8,8 +9,9 @@ import com.tecsup.pe.back_zonet.entity.Reaction;
 import com.tecsup.pe.back_zonet.entity.User;
 import com.tecsup.pe.back_zonet.repository.CommentRepository;
 import com.tecsup.pe.back_zonet.repository.CommunityRepository;
-import com.tecsup.pe.back_zonet.repository.ReactionRepository; // Importado
+import com.tecsup.pe.back_zonet.repository.ReactionRepository;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
+import com.tecsup.pe.back_zonet.service.notification.NotificationService; // 🟢 NUEVO
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +29,13 @@ public class CommunityService {
     private CommentRepository commentRepository;
 
     @Autowired
-    private ReactionRepository reactionRepository; // Inyectado
+    private ReactionRepository reactionRepository;
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private NotificationService notificationService; // 🟢 INYECCIÓN NUEVA
 
     public CommunityPost save(CommunityPost post) {
         return communityRepository.save(post);
@@ -55,11 +60,6 @@ public class CommunityService {
         return commentRepository.save(comment);
     }
 
-    /**
-     * 💡 Lógica de negocio para añadir o remover una reacción (Toggle).
-     * Si la reacción existe, la borra (unlike). Si no existe, la crea (like).
-     * @return true si se añade la reacción, false si se elimina.
-     */
     @Transactional
     public boolean toggleReaction(ReactionDTO dto) {
         CommunityPost post = communityRepository.findById(dto.getPostId())
@@ -68,20 +68,56 @@ public class CommunityService {
         User user = userRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        // 1. Verificar si la reacción ya existe (toggle)
         Optional<Reaction> existingReaction = reactionRepository.findByPostAndUser(post, user);
 
         if (existingReaction.isPresent()) {
-            // 2. Si existe, la eliminamos (Unlike)
             reactionRepository.delete(existingReaction.get());
-            return false; // Reacción eliminada
+            return false;
         } else {
-            // 3. Si no existe, la creamos (Like)
             Reaction newReaction = new Reaction();
             newReaction.setPost(post);
             newReaction.setUser(user);
             reactionRepository.save(newReaction);
-            return true; // Reacción añadida
+            return true;
         }
+    }
+
+    // ------------------------------------------------------------
+    // 🟢 NUEVO MÉTODO: Alerta de contacto al autor del post
+    // ------------------------------------------------------------
+    public void sendContactAlert(ContactRequest request) {
+
+        // 1. Buscar el post
+        CommunityPost post = communityRepository.findById(request.getPostId())
+                .orElseThrow(() -> new RuntimeException("La publicación ya no existe."));
+
+        // 2. Dueño de la publicación
+        User recipientAuthor = post.getUser();
+
+        // 3. Título dinámico
+        String title;
+        if ("SIGHTING".equals(post.getPostType())) {
+            title = "💬 ¡Alguien reclama tu avistamiento!";
+        } else {
+            title = "🔔 Información sobre tu mascota perdida";
+        }
+
+        // 4. Mensaje con detalles de contacto
+        String messageBody = String.format(
+                "%s te escribió: \"%s\".\n📞 %s\n📧 %s",
+                request.getName(),
+                request.getMessage(),
+                request.getPhone(),
+                request.getEmail() != null ? request.getEmail() : "Sin correo"
+        );
+
+        // 5. Enviar notificación Push
+        notificationService.createSystemNotification(
+                recipientAuthor.getId(),
+                title,
+                messageBody,
+                "CONTACT_MESSAGE",
+                "HIGH"
+        );
     }
 }

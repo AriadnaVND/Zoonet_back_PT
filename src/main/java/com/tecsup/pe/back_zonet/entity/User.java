@@ -19,18 +19,21 @@ public class User {
     private String name;
     private String email;
 
-    @JsonIgnore // 🔒 CORRECCIÓN DE SEGURIDAD
+    @JsonIgnore
     private String password;
 
     private String plan; // FREE o PREMIUM
-
     private boolean active = true;
+
+    // 🟢 NUEVO CAMPO - Token para notificaciones PUSH (Firebase Cloud Messaging)
+    @Column(name = "fcm_token")
+    private String fcmToken;
 
     // ----------------------------------------------------
     // ✅ RELACIONES PARA ELIMINACIÓN EN CASCADA COMPLETA
     // ----------------------------------------------------
 
-    // 1. Mascota (Pet)
+    // 1. Mascotas (Pet)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<Pet> pets;
@@ -55,7 +58,7 @@ public class User {
     @JsonIgnore
     private List<Notification> notifications;
 
-    // 6. Zonas Seguras (SafeZone) - SOLUCIONA EL ERROR ACTUAL
+    // 6. Zonas Seguras (SafeZone)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<SafeZone> safeZones;

@@ -9,12 +9,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+// 🔹 IMPORT NUEVO (según lo que pediste)
+import com.tecsup.pe.back_zonet.repository.UserRepository;
+
 @RestController
 @RequestMapping("/api/user/profile")
 public class UserController {
 
     @Autowired
     private UserService userService;
+
+    // 🔹 NUEVA INYECCIÓN DEL REPOSITORIO
+    @Autowired
+    private UserRepository userRepository;
 
     /**
      * 🟢 GET /api/user/profile/{userId}
@@ -24,7 +31,6 @@ public class UserController {
     public ResponseEntity<User> getProfile(@PathVariable Long userId) {
         try {
             User user = userService.getProfile(userId);
-            // IMPORTANTE: Nullificar la contraseña antes de enviarla al cliente
             user.setPassword(null);
             return ResponseEntity.ok(user);
         } catch (RuntimeException e) {
@@ -32,11 +38,9 @@ public class UserController {
         }
     }
 
-
     /**
      * 🟢 PUT /api/user/profile/{userId}
      * Actualiza nombre, email y/o contraseña.
-     * Se usa Map para un request body flexible.
      */
     @PutMapping("/{userId}")
     public ResponseEntity<?> updateProfile(
@@ -48,13 +52,10 @@ public class UserController {
             String password = updates.get("password");
 
             User updatedUser = userService.updateProfile(userId, name, email, password);
-
-            // IMPORTANTE: Nullificar la contraseña antes de enviar la respuesta
             updatedUser.setPassword(null);
 
             return ResponseEntity.ok(updatedUser);
         } catch (RuntimeException e) {
-            // Manejar error de usuario no encontrado o email duplicado
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
@@ -67,9 +68,38 @@ public class UserController {
     public ResponseEntity<Void> deleteProfile(@PathVariable Long userId) {
         try {
             userService.deleteProfile(userId);
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).build(); // 204 No Content
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 🟢 NUEVO ENDPOINT: Guardar Token FCM para notificaciones PUSH
+    // ---------------------------------------------------------------
+    /**
+     * 🟢 PUT /api/user/profile/{userId}/fcm-token
+     * Guarda o actualiza el token FCM del usuario.
+     */
+    @PutMapping("/{userId}/fcm-token")
+    public ResponseEntity<?> updateFcmToken(
+            @PathVariable Long userId,
+            @RequestBody Map<String, String> body // Recibe {"token": "AAAA..."}
+    ) {
+        String token = body.get("token");
+
+        if (token == null || token.isEmpty()) {
+            return ResponseEntity.badRequest().body("El token es obligatorio");
+        }
+
+        try {
+            User user = userService.getProfile(userId);
+            user.setFcmToken(token);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(Map.of("message", "Token FCM actualizado correctamente"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
 }
