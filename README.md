@@ -70,8 +70,8 @@ com.tecsup.pe.back_zonet/
 ### Paso 1: Clonar el Repositorio
 
 ```bash
-git clone <URL_DEL_REPOSITORIO>
-cd back-zoonet
+git clone https://github.com/AriadnaVND/Zoonet_back_PT.git
+cd Zoonet_back_PT
 ```
 
 ### Paso 2: Configurar la Base de Datos
