@@ -94,9 +94,12 @@ public class PetController {
             initialReport.setPetId(pet.getId());
             initialReport.setLatitude(-12.04398);
             initialReport.setLongitude(-76.95291);
-            initialReport.setBatteryLevel(10.0); // 10% para forzar LOW_BATTERY
+            // ✅ CORRECCIÓN: Batería al 100% para evitar la alerta LOW_BATTERY
+            initialReport.setBatteryLevel(100.0);
 
             // Dispara el guardado de ubicación y las notificaciones
+            // Solo se disparará la notificación de LOCATION (Ubicación Actualizada)
+            // ya que la alerta LOW_BATTERY solo ocurre si el nivel es <= 20.
             trackerService.updateLocation(initialReport);
 
             // 💡 LÓGICA DE PAGO ACTUALIZADA: Devolver un mensaje de éxito/instrucción
