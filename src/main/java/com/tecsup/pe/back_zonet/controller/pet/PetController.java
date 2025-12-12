@@ -7,6 +7,8 @@ import com.tecsup.pe.back_zonet.service.pet.PetService;
 import com.tecsup.pe.back_zonet.service.auth.PaymentService;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
 import com.tecsup.pe.back_zonet.repository.PetRepository;
+import com.tecsup.pe.back_zonet.service.location.TrackerService; // AGREGADO: Importar TrackerService
+import com.tecsup.pe.back_zonet.dto.LocationReportDTO; // AGREGADO: Importar LocationReportDTO
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +38,10 @@ public class PetController {
 
     @Autowired
     private PetRepository petRepository;
+
+    // 🟢 NUEVO: Inyectar TrackerService
+    @Autowired
+    private TrackerService trackerService;
 
     private static final String UPLOAD_DIR = "uploads/";
 
@@ -82,6 +88,16 @@ public class PetController {
             pet.setPhotoUrl("/" + UPLOAD_DIR + fileName);
             pet.setUser(user);
             petService.save(pet); // <--- Mascota registrada
+
+            // 🟢 SIMULACIÓN DE REPORTE INICIAL - Se ejecuta la lógica para guardar la ubicación inicial y generar notificaciones
+            LocationReportDTO initialReport = new LocationReportDTO();
+            initialReport.setPetId(pet.getId());
+            initialReport.setLatitude(-12.04398);
+            initialReport.setLongitude(-76.95291);
+            initialReport.setBatteryLevel(10.0); // 10% para forzar LOW_BATTERY
+
+            // Dispara el guardado de ubicación y las notificaciones
+            trackerService.updateLocation(initialReport);
 
             // 💡 LÓGICA DE PAGO ACTUALIZADA: Devolver un mensaje de éxito/instrucción
             if (planType.equalsIgnoreCase("premium")) {
