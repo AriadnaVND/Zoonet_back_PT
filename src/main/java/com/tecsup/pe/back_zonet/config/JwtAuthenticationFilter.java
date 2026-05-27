@@ -27,8 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        // 1. 🟢 OPTIMIZACIÓN ANTICHOQUE: Si la ruta no pertenece a la administración web,
-        // dejamos pasar la petición de inmediato sin procesar ni exigir JWT.
+        // 1. Solo procesamos rutas que requieren administración
         if (!path.startsWith("/api/admin/")) {
             filterChain.doFilter(request, response);
             return;
@@ -36,9 +35,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String header = request.getHeader("Authorization");
 
-        // 2. Procesamiento exclusivo de tokens para las rutas /api/admin/**
+        // 2. Solo intentamos validar si el header existe y comienza con Bearer
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
+
             try {
                 Claims claims = Jwts.parserBuilder()
                         .setSigningKey(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))
@@ -49,32 +49,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String email = claims.getSubject();
                 String role = claims.get("role", String.class);
 
-                // Forzar el formato correcto del rol para el contexto de Spring Security
-                if (role == null) {
-                    role = "USER";
-                }
+                System.out.println("DEBUG JWT: Email=" + email + ", Rol en Token=" + role);
 
-                if (!role.startsWith("ROLE_")) {
-                    role = "ROLE_" + role.toUpperCase();
-                }
-
-                // 3. Validar de forma estricta que solo el rol ADMIN acceda al contexto de administración
-                if (email != null && "ROLE_ADMIN".equals(role) && SecurityContextHolder.getContext().getAuthentication() == null) {
+                if (email != null && role != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                             email, null, Collections.singletonList(new SimpleGrantedAuthority(role)));
 
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(auth);
-                } else {
-                    // Si el token es válido pero no posee privilegios de administrador, limpiamos el contexto
-                    SecurityContextHolder.clearContext();
                 }
             } catch (Exception e) {
-                // Ante cualquier firma corrupta o token expirado, bloqueamos el acceso de forma segura
+                // Si el token falla, limpiamos el contexto y dejamos que Spring Security decida (403 si es admin)
                 SecurityContextHolder.clearContext();
             }
         }
 
+        // Pasamos al siguiente filtro de la cadena
         filterChain.doFilter(request, response);
     }
 }
