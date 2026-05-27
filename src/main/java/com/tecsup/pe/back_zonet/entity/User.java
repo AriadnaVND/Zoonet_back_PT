@@ -22,48 +22,44 @@ public class User {
     @JsonIgnore
     private String password;
 
-    private String plan; // FREE o PREMIUM
+    private String plan; // "FREE" o "PREMIUM"
     private boolean active = true;
 
-    // 🟢 NUEVO CAMPO - Token para notificaciones PUSH (Firebase Cloud Messaging)
+    // 🟢 Rol para diferenciar accesos ("USER" o "ADMIN")
+    @Column(name = "role", nullable = false)
+    private String role = "USER";
+
     @Column(name = "fcm_token")
     private String fcmToken;
 
     // ----------------------------------------------------
-    // ✅ RELACIONES PARA ELIMINACIÓN EN CASCADA COMPLETA
+    // ✅ RELACIONES EN CASCADA COMPLETA (Móvil e IoT)
     // ----------------------------------------------------
 
-    // 1. Mascotas (Pet)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<Pet> pets;
 
-    // 2. Publicaciones de Comunidad (CommunityPost)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<CommunityPost> posts;
 
-    // 3. Comentarios (Comment)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<Comment> comments;
 
-    // 4. Reacciones (Reaction)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<Reaction> reactions;
 
-    // 5. Notificaciones (Notification)
     @OneToMany(mappedBy = "recipientUser", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<Notification> notifications;
 
-    // 6. Zonas Seguras (SafeZone)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<SafeZone> safeZones;
 
-    // 7. Suscripción (Subscription)
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private Subscription subscription;

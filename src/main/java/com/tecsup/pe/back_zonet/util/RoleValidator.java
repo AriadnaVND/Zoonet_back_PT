@@ -3,6 +3,7 @@ package com.tecsup.pe.back_zonet.util;
 import com.tecsup.pe.back_zonet.entity.User;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,6 +15,10 @@ public class RoleValidator {
     public RoleValidator(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
+
+    // ==========================================
+    // 1. MÉTODOS ORIGINALES (Mantenidos intactos)
+    // ==========================================
 
     /**
      * Verifica si el usuario es Free (o si el plan es nulo/desconocido, asumiendo Free)
@@ -41,5 +46,18 @@ public class RoleValidator {
 
         // Solo es Premium si el String es exactamente "PREMIUM"
         return plan != null && plan.trim().equalsIgnoreCase("PREMIUM");
+    }
+
+    // ==========================================
+    // 2. NUEVO MÉTODO PARA ADMINISTRACIÓN
+    // ==========================================
+
+    /**
+     * Verifica si el usuario autenticado actualmente en Spring Security tiene el rol ROLE_ADMIN
+     */
+    public boolean isCurrentUserAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 }
