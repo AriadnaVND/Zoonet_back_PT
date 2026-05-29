@@ -1,33 +1,37 @@
-HELP.md
+# --- SEGURIDAD: ARCHIVOS CON CLAVES SENSIBLES ---
+# Nunca subas tus claves de API o credenciales de servicios
+src/main/resources/application.properties
+src/main/resources/serviceAccountKey.json
+*.p12
+*.jks
+
+# --- BUILD Y TARGET ---
 target/
+build/
+bin/
+out/
+.gradle/
 .mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
+# --- INTELLIJ IDEA ---
+.idea/
 *.iws
 *.iml
 *.ipr
+*.ids
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
+# --- VS CODE ---
 .vscode/
+
+# --- SISTEMA OPERATIVO ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# --- LOGS Y TEMPORALES ---
+logs/
+*.log
+*.tmp
+*.bak
+.sts4-cache/
