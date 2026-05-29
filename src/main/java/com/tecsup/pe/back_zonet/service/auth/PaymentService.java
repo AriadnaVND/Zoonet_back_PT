@@ -1,11 +1,12 @@
 package com.tecsup.pe.back_zonet.service.auth;
 
+import com.tecsup.pe.back_zonet.entity.Payment; // 🟢 Importación necesaria
 import com.tecsup.pe.back_zonet.entity.Subscription;
 import com.tecsup.pe.back_zonet.entity.User;
+import com.tecsup.pe.back_zonet.repository.PaymentRepository; // 🟢 Importación necesaria
 import com.tecsup.pe.back_zonet.repository.SubscriptionRepository;
 import com.tecsup.pe.back_zonet.repository.UserRepository;
-import com.tecsup.pe.back_zonet.dto.PaymentRequest; // 💡 AGREGADO
-import com.tecsup.pe.back_zonet.dto.PaymentResponse;
+import com.tecsup.pe.back_zonet.dto.PaymentRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,44 +21,30 @@ public class PaymentService {
     @Autowired
     private SubscriptionRepository subscriptionRepository;
 
-    /**
-     * ❌ Eliminado: Ya no se necesita una redirección, el frontend manejará el formulario y llamará a process.
-     public PaymentResponse createPaymentRedirect(Long userId) {
-     userRepository.findById(userId)
-     .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-     // Simulación: URL que lleva a la "Pasarela de Pago" de la imagen.
-     String dummyPaymentUrl = "https://pasarela-zoonet.com/checkout?user=" + userId + "&amount=15.00";
-     return new PaymentResponse(dummyPaymentUrl, "PREMIUM", userId);
-     }
-     */
+    @Autowired
+    private PaymentRepository paymentRepository; // 🟢 Inyección añadida
 
     /**
-     * 🟢 NUEVO: Procesa la simulación de pago con los datos de tarjeta y valida formato.
+     * Procesa la simulación de pago, guarda la suscripción y registra el pago.
      */
     @Transactional
     public Subscription processPremiumPayment(Long userId, PaymentRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        // 1. SIMULACIÓN DE VALIDACIÓN DEL FORMATO DE LA TARJETA (según la solicitud)
-
-        // Número de tarjeta: Asumimos 16 dígitos exactos
+        // 1. VALIDACIONES DE FORMATO
         if (request.getCardNumber() == null || !request.getCardNumber().matches("\\d{16}")) {
             throw new RuntimeException("Número de tarjeta inválido. Debe tener 16 dígitos exactos.");
         }
-        // CVV: 3 dígitos exactos
         if (request.getCvv() == null || !request.getCvv().matches("\\d{3}")) {
             throw new RuntimeException("CVV inválido. Debe tener 3 dígitos exactos.");
         }
-        // Fecha: (MM/YY) - Se valida el formato de dos dígitos para mes y año
         if (request.getExpirationMonth() == null || request.getExpirationYear() == null ||
                 !request.getExpirationMonth().matches("\\d{1,2}") || !request.getExpirationYear().matches("\\d{2}")) {
             throw new RuntimeException("Fecha de expiración inválida. Use formato MM/YY.");
         }
 
-        // 2. SIMULACIÓN DE CONFIRMACIÓN DE PAGO (si las validaciones de formato pasan, se simula el éxito)
-
-        // 3. Persistir la suscripción
+        // 2. PERSISTIR SUSCRIPCIÓN
         user.setPlan("PREMIUM");
         userRepository.save(user);
 
@@ -66,12 +53,22 @@ public class PaymentService {
         sub.setPlan("PREMIUM");
         sub.setStartDate(LocalDate.now());
         sub.setEndDate(LocalDate.now().plusMonths(1));
+        Subscription savedSub = subscriptionRepository.save(sub);
 
-        return subscriptionRepository.save(sub);
+        // 3. 🟢 GUARDAR EL PAGO (Esto hará que aparezca en tu AdminPanel)
+        Payment payment = new Payment();
+        payment.setUser(user);
+        payment.setAmount(15.00); // Monto fijo como ejemplo
+        payment.setStatus("COMPLETED"); // Cambia a "PENDING" si quieres aprobación manual
+        payment.setPaymentDate(LocalDate.now());
+
+        paymentRepository.save(payment);
+
+        return savedSub;
     }
 
     /**
-     * 🟢 Paso 3 (Confirmación - Mantenido): Se mantiene el método original.
+     * Confirmación de pago (Mantenido igual pero añadiendo registro de Payment también).
      */
     @Transactional
     public Subscription completePremiumPayment(Long userId) {
@@ -86,7 +83,16 @@ public class PaymentService {
         sub.setPlan("PREMIUM");
         sub.setStartDate(LocalDate.now());
         sub.setEndDate(LocalDate.now().plusMonths(1));
+        Subscription savedSub = subscriptionRepository.save(sub);
 
-        return subscriptionRepository.save(sub);
+        // 🟢 Registro de pago en confirmación
+        Payment payment = new Payment();
+        payment.setUser(user);
+        payment.setAmount(15.00);
+        payment.setStatus("COMPLETED");
+        payment.setPaymentDate(LocalDate.now());
+        paymentRepository.save(payment);
+
+        return savedSub;
     }
 }
