@@ -1,6 +1,6 @@
 package com.tecsup.pe.back_zonet.controller.admin;
 
-import com.tecsup.pe.back_zonet.entity.User;
+import com.tecsup.pe.back_zonet.dto.admin.UserSummaryDTO;
 import com.tecsup.pe.back_zonet.service.admin.AdminUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -16,30 +16,19 @@ public class AdminUserController {
     @Autowired
     private AdminUserService adminUserService;
 
+    // Retorna la lista con la estructura visual completa (Mascota, Collar, Teléfono, etc.)
     @GetMapping("/all")
-    public ResponseEntity<List<User>> getAllUsers() {
-        return ResponseEntity.ok(adminUserService.obtenerTodosLosUsuarios());
+    public ResponseEntity<List<UserSummaryDTO>> getAllUsers() {
+        return ResponseEntity.ok(adminUserService.obtenerResumenUsuariosAdmin());
     }
 
-    @PostMapping("/create")
-    public ResponseEntity<User> create(@RequestBody User user) {
-        return ResponseEntity.ok(adminUserService.crearUsuario(user));
-    }
-
-    @PutMapping("/update/{id}")
-    public ResponseEntity<User> update(@PathVariable Long id, @RequestBody User user) {
-        try {
-            return ResponseEntity.ok(adminUserService.actualizarUsuario(id, user));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
+    // Cambiado para usar el buscador predictivo que procesa el DTO
     @GetMapping("/search")
-    public ResponseEntity<List<User>> search(@RequestParam String term) {
-        return ResponseEntity.ok(adminUserService.buscarUsuarios(term));
+    public ResponseEntity<List<UserSummaryDTO>> search(@RequestParam String term) {
+        return ResponseEntity.ok(adminUserService.buscarResumenUsuarios(term));
     }
 
+    // El botón dinámico de "Suspender / Activar" funciona perfectamente
     @PatchMapping("/toggle-active/{id}")
     public ResponseEntity<?> toggleActive(@PathVariable Long id, @RequestParam boolean status) {
         adminUserService.cambiarEstadoUsuario(id, status);
