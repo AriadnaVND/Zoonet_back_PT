@@ -2,6 +2,7 @@ package com.tecsup.pe.back_zonet.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp; // IMPORTANTE
 import java.time.LocalDateTime;
 
 @Entity
@@ -12,12 +13,16 @@ public class AdminModerationLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long postId; // Relación con el ID de CommunityPost
-    private String status; // Ej: PENDING, APPROVED, REJECTED, MANUAL_REVIEW
+    @Column(nullable = false)
+    private Long postId;
+
+    private String status;
     private Double aiScore;
 
     @Column(columnDefinition = "TEXT")
     private String aiReason;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp // Se llena solo automáticamente
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
 }

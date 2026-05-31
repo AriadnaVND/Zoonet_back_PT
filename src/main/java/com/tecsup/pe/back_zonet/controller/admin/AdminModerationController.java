@@ -11,6 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/moderacion")
+@CrossOrigin(origins = "*")
 public class AdminModerationController {
 
     @Autowired
@@ -19,6 +20,12 @@ public class AdminModerationController {
     @GetMapping("/pendientes")
     public List<AdminModerationLog> obtenerPendientes() {
         return moderationRepository.findByStatus("PENDING");
+    }
+
+    // ← NUEVO: retorna TODOS los logs (APPROVED + REJECTED + PENDING)
+    @GetMapping("/todos")
+    public ResponseEntity<List<AdminModerationLog>> getTodos() {
+        return ResponseEntity.ok(moderationRepository.findAll());
     }
 
     @GetMapping("/estadisticas")
