@@ -60,7 +60,7 @@ public class AdminModerationService {
 
         System.out.println("DEBUG API KEY: " + (apiKey == null || apiKey.isBlank() ? "⚠️ VACÍA O NULA" : "✅ OK (longitud: " + apiKey.length() + ")"));
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey;
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
         System.out.println("DEBUG URL: " + url);
 
         Map<String, Object> requestBody = Map.of(
