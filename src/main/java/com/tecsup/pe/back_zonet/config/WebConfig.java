@@ -11,7 +11,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Expone de forma limpia la carpeta física de fotos para el frontend
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:uploads/");
+                .addResourceLocations("file:/app/uploads/");
     }
 
     // 🟢 CORRECCIÓN: Se eliminó addCorsMappings de aquí.
