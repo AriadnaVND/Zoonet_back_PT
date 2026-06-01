@@ -7,6 +7,7 @@ import com.tecsup.pe.back_zonet.entity.AdminModerationLog;
 import com.tecsup.pe.back_zonet.entity.CommunityPost;
 import com.tecsup.pe.back_zonet.repository.CommunityRepository;
 import com.tecsup.pe.back_zonet.repository.ModerationRepository;
+import com.tecsup.pe.back_zonet.service.notification.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -14,17 +15,30 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @Transactional
 public class AdminModerationService {
 
-    @Autowired private CommunityRepository communityRepo;
-    @Autowired private ModerationRepository moderationRepository;
-    @Autowired private AdminGeminiConfig adminGeminiConfig;
-    @Autowired private RestTemplate restTemplate;
+    @Autowired
+    private CommunityRepository communityRepo;
+
+    @Autowired
+    private ModerationRepository moderationRepository;
+
+    @Autowired
+    private AdminGeminiConfig adminGeminiConfig;
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private NotificationService notificationService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void analizarPost(Long postId) {
@@ -82,6 +96,27 @@ public class AdminModerationService {
                         .trim();
 
                 JsonNode root = objectMapper.readTree(jsonLimpio);
+                String status = root.path("status").asText("PENDING");
+                String reason = root.path("reason").asText("Infracción de normas");
+
+                // 🟢 NUEVA LÓGICA DE MODERACIÓN AUTOMÁTICA
+                if ("REJECTED".equals(status)) {
+                    CommunityPost post = communityRepo.findById(postId).orElse(null);
+                    if (post != null) {
+                        // 1. Notificar al usuario (si tiene token)
+                        if (post.getUser().getFcmToken() != null) {
+                            notificationService.sendPushNotification(
+                                    post.getUser().getFcmToken(),
+                                    "⚠️ Alerta de Seguridad ZooNet",
+                                    "Tu publicación fue eliminada por: " + reason,
+                                    "MODERATION_ALERT"
+                            );
+                        }
+                        // 2. Eliminar el post de la base de datos
+                        communityRepo.deleteById(postId);
+                        log.info("🚀 Post {} eliminado automáticamente por IA", postId);
+                    }
+                }
 
                 AdminModerationLog log = new AdminModerationLog();
                 log.setPostId(postId);
