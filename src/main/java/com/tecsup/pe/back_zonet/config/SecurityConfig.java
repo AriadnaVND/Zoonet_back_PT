@@ -33,6 +33,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+
                         // Permiso libre absoluto a las fotos de las mascotas
                         .requestMatchers("/uploads/**").permitAll()
 
@@ -63,7 +66,9 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:3000",
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
+                "http://127.0.0.1:5173",
+                "https://admin.vickari.site",
+                "https://vickari.site"
         ));
 
         // Métodos y verbos HTTP habilitados para todo el ecosistema de ZooNet
