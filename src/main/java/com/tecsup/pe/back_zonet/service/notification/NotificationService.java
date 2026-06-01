@@ -91,10 +91,8 @@ public class NotificationService {
     /**
      * 🟢 Método privado para enviar a Firebase Cloud Messaging
      */
-    public void sendPushNotification(String token, String title, String body, String type) {
+    private void sendPushNotification(String token, String title, String body, String type) {
         try {
-            if (token == null || token.isEmpty()) return;
-
             // Construir la notificación visual de Firebase
             // Usamos el nombre completo de la clase para no confundirla con tu entidad 'Notification'
             com.google.firebase.messaging.Notification firebaseNotif = com.google.firebase.messaging.Notification.builder()
