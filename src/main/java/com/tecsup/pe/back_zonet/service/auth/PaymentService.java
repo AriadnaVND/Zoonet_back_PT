@@ -58,7 +58,7 @@ public class PaymentService {
         // 3. 🟢 GUARDAR EL PAGO (Esto hará que aparezca en tu AdminPanel)
         Payment payment = new Payment();
         payment.setUser(user);
-        payment.setAmount(15.00); // Monto fijo como ejemplo
+        payment.setAmount(39.99); // Monto fijo como ejemplo
         payment.setStatus("COMPLETED"); // Cambia a "PENDING" si quieres aprobación manual
         payment.setPaymentDate(LocalDate.now());
 
@@ -88,7 +88,7 @@ public class PaymentService {
         // 🟢 Registro de pago en confirmación
         Payment payment = new Payment();
         payment.setUser(user);
-        payment.setAmount(15.00);
+        payment.setAmount(39.99);
         payment.setStatus("COMPLETED");
         payment.setPaymentDate(LocalDate.now());
         paymentRepository.save(payment);
