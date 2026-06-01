@@ -75,7 +75,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
 
         // 🟢 CORRECCIÓN: Agregamos "Authorization" de forma explícita y permitimos todas las cabeceras estándar entrantes
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
 
         // Habilitamos el transporte seguro de cookies o cabeceras de autenticación
         configuration.setAllowCredentials(true);
