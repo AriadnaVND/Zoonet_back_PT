@@ -7,6 +7,7 @@ import com.tecsup.pe.back_zonet.entity.AdminModerationLog;
 import com.tecsup.pe.back_zonet.entity.CommunityPost;
 import com.tecsup.pe.back_zonet.repository.CommunityRepository;
 import com.tecsup.pe.back_zonet.repository.ModerationRepository;
+import com.tecsup.pe.back_zonet.service.notification.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +26,7 @@ public class AdminModerationService {
     @Autowired private ModerationRepository moderationRepository;
     @Autowired private AdminGeminiConfig adminGeminiConfig;
     @Autowired private RestTemplate restTemplate;
+    @Autowired private NotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void analizarPost(Long postId) {
@@ -37,10 +39,10 @@ public class AdminModerationService {
         CommunityPost post = communityRepo.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post no encontrado con ID: " + postId));
 
-        ejecutarAnalisisIA(postId, post.getDescription());
+        ejecutarAnalisisIA(postId, post);
     }
 
-    private void ejecutarAnalisisIA(Long postId, String descripcion) {
+    private void ejecutarAnalisisIA(Long postId, CommunityPost post) {
         String apiKey = adminGeminiConfig.getApiKey();
 
         System.out.println("DEBUG API KEY: " + (apiKey == null || apiKey.isBlank() ? "⚠️ VACÍA O NULA" : "✅ OK (longitud: " + apiKey.length() + ")"));
@@ -55,7 +57,7 @@ public class AdminModerationService {
                                         "Analiza este texto y responde SOLO con un JSON válido, sin explicaciones ni bloques de código. " +
                                                 "Formato exacto: {\"score\": 0.95, \"status\": \"APPROVED\", \"reason\": \"motivo aquí\"}. " +
                                                 "El status debe ser APPROVED si el contenido es apropiado, o REJECTED si no lo es. " +
-                                                "Texto a analizar: " + descripcion)
+                                                "Texto a analizar: " + post.getDescription())
                         })
                 }
         );
@@ -91,11 +93,20 @@ public class AdminModerationService {
                 moderationRepository.save(log);
                 System.out.println("✅ Moderación exitosa guardada para post: " + postId);
 
-                // ← NUEVO: Si fue rechazado, eliminar automáticamente de la comunidad
+                // Si fue rechazado, notificar al usuario
                 if ("REJECTED".equals(log.getStatus())) {
-                    moderationRepository.deleteByPostId(postId); // primero borra el log
-                    communityRepo.deleteById(postId);            // luego borra el post
-                    System.out.println("🗑️ Post " + postId + " eliminado automáticamente por contenido inapropiado.");
+                    Long userId = post.getUser().getId();
+
+                    notificationService.createSystemNotification(
+                            userId,
+                            "⚠️ Tu publicación fue eliminada",
+                            "Tu publicación fue detectada como contenido inapropiado por nuestro sistema de IA y ha sido eliminada de la comunidad. " +
+                                    "Si reincides, tu cuenta podría ser suspendida. Por favor revisa las normas de ZooNet.",
+                            "MODERATION_WARNING",
+                            "HIGH"
+                    );
+
+                    System.out.println("🔔 Notificación enviada al usuario ID: " + userId);
                 }
 
             } else {
