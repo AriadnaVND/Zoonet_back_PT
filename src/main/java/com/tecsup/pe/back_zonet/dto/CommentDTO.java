@@ -12,4 +12,5 @@ public class CommentDTO {
     private String userName;
     private String content; // Contenido del comentario
     private LocalDateTime createdAt;
+    private String userPhotoUrl;
 }

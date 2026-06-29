@@ -70,11 +70,19 @@ public class CommunityService {
         return comments.stream().map(c -> {
             CommentDTO dto = new CommentDTO();
             dto.setId(c.getId());
-            dto.setPostId(c.getPost().getId());
-            dto.setUserId(c.getUser().getId());
             dto.setContent(c.getContent());
-            // Asumiendo que quieres el nombre del autor en el frontend
             dto.setUserName(c.getUser().getName());
+
+            // 🟢 Lógica: Intentar obtener foto de la mascota asociada al post,
+            // o una foto de perfil si tuvieras el campo en User
+            CommunityPost post = c.getPost();
+            if (post.getLostPetSource() != null) {
+                dto.setUserPhotoUrl(post.getLostPetSource().getPet().getPhotoUrl());
+            } else {
+                dto.setUserPhotoUrl(null); // O un avatar genérico
+            }
+
+            dto.setCreatedAt(c.getCreatedAt());
             return dto;
         }).toList();
     }
