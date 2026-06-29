@@ -70,19 +70,22 @@ public class CommunityService {
         return comments.stream().map(c -> {
             CommentDTO dto = new CommentDTO();
             dto.setId(c.getId());
+            dto.setPostId(c.getPost().getId());
+            dto.setUserId(c.getUser().getId());
             dto.setContent(c.getContent());
             dto.setUserName(c.getUser().getName());
+            dto.setCreatedAt(c.getCreatedAt());
 
-            // 🟢 Lógica: Intentar obtener foto de la mascota asociada al post,
-            // o una foto de perfil si tuvieras el campo en User
-            CommunityPost post = c.getPost();
-            if (post.getLostPetSource() != null) {
-                dto.setUserPhotoUrl(post.getLostPetSource().getPet().getPhotoUrl());
+            // 🟢 LÓGICA DE FOTO:
+            // Buscamos la lista de mascotas del usuario del comentario
+            User userAuthor = c.getUser();
+            if (userAuthor.getPets() != null && !userAuthor.getPets().isEmpty()) {
+                // Asignamos la foto de la primera mascota encontrada
+                dto.setUserPhotoUrl(userAuthor.getPets().get(0).getPhotoUrl());
             } else {
-                dto.setUserPhotoUrl(null); // O un avatar genérico
+                dto.setUserPhotoUrl(null); // Si el usuario no tiene mascota, llega null
             }
 
-            dto.setCreatedAt(c.getCreatedAt());
             return dto;
         }).toList();
     }
