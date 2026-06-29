@@ -28,12 +28,13 @@ public class AdminDeviceController {
         for (User user : users) {
             if (user.getPets() != null) {
                 for (Pet pet : user.getPets()) {
-                    // 🔄 CORRECCIÓN: Se cambiaron los getters a los reales de tu entidad Pet base (getName())
+                    // SE HA MODIFICADO: Ahora el "status" lee directamente el valor de la base de datos
+                    // desde la entidad Pet, en lugar de estar fijado como "CONECTADO".
                     report.add(Map.of(
                             "petName", pet.getName() != null ? pet.getName() : "Sin nombre",
                             "ownerEmail", user.getEmail(),
                             "deviceId", "ZN-IOT-" + pet.getId(),
-                            "status", "CONECTADO" // Fallback fijo para evitar choques con el tracker IoT
+                            "status", pet.getDeviceStatus() != null ? pet.getDeviceStatus() : "DISCONNECTED"
                     ));
                 }
             }
