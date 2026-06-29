@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/admin/community")  // ← solo esto cambia
+@RequestMapping("/api/admin/community")
 @CrossOrigin(origins = "*")
 public class AdminCommunityController {
 
@@ -27,7 +27,7 @@ public class AdminCommunityController {
             moderationService.analizarPost(id);
             return ResponseEntity.ok(Map.of("message", "Análisis completado", "postId", id));
         } catch (RuntimeException e) {
-            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage())); // ← cambiado
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
