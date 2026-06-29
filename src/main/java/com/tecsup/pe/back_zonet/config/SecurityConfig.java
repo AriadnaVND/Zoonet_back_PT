@@ -28,7 +28,6 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Enlazamos de forma mandatoria el origen de datos seguro de abajo
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -36,21 +35,24 @@ public class SecurityConfig {
 
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Permiso libre absoluto a las fotos de las mascotas
+                        // Fotos de mascotas
                         .requestMatchers("/uploads/**").permitAll()
 
-                        // 1. Rutas de autenticación libres (Móvil y Web Admin)
+                        // Autenticación
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/admin/auth/login").permitAll()
 
-                        // 2. Endpoints libres para los collares IoT
+                        // IoT
                         .requestMatchers("/api/location/tracker/**").permitAll()
                         .requestMatchers("/api/tracker/**").permitAll()
 
-                        // 3. Control estricto para el Panel de Administración (Requiere ROLE_ADMIN)
+                        // ← CORRECCIÓN: comunidad permitida antes de la regla ADMIN
+                        .requestMatchers("/api/admin/community/**").permitAll()
+
+                        // Admin general requiere ROLE_ADMIN
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        // 4. Cualquier otra ruta queda permitida para evitar romper Flutter
+                        // Resto libre para Flutter
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -62,7 +64,6 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Orígenes explícitos autorizados (PROHIBIDO usar "*" con allowCredentials)
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:3000",
                 "http://localhost:5173",
@@ -71,13 +72,8 @@ public class SecurityConfig {
                 "https://vickari.site"
         ));
 
-        // Métodos y verbos HTTP habilitados para todo el ecosistema de ZooNet
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-
-        // 🟢 CORRECCIÓN: Agregamos "Authorization" de forma explícita y permitimos todas las cabeceras estándar entrantes
         configuration.setAllowedHeaders(Arrays.asList("*"));
-
-        // Habilitamos el transporte seguro de cookies o cabeceras de autenticación
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
