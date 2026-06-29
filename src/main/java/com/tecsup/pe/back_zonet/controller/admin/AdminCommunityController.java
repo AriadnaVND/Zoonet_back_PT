@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/admin/community") // <-- Eliminado el "/api" inicial
+@RequestMapping("/api/admin/community")  // ← solo esto cambia
 @CrossOrigin(origins = "*")
 public class AdminCommunityController {
 
