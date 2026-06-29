@@ -8,8 +8,7 @@ import java.util.List;
 @Repository
 public interface ModerationRepository extends JpaRepository<AdminModerationLog, Long> {
     List<AdminModerationLog> findByStatus(String status);
-    long countByStatus(String status); // Nuevo método para estadísticas
-
-    // ✅ NUEVO: verifica si ya existe un log para ese postId
+    long countByStatus(String status);
     boolean existsByPostId(Long postId);
+    void deleteByPostId(Long postId); // ← NUEVO
 }

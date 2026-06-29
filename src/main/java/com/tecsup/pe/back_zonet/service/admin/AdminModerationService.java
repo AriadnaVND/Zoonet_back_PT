@@ -28,7 +28,6 @@ public class AdminModerationService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void analizarPost(Long postId) {
-        // ✅ Si ya existe un log para este post, no volver a analizar
         boolean yaAnalizado = moderationRepository.existsByPostId(postId);
         if (yaAnalizado) {
             System.out.println("⚠️ Post " + postId + " ya fue analizado. Saltando...");
@@ -91,6 +90,14 @@ public class AdminModerationService {
 
                 moderationRepository.save(log);
                 System.out.println("✅ Moderación exitosa guardada para post: " + postId);
+
+                // ← NUEVO: Si fue rechazado, eliminar automáticamente de la comunidad
+                if ("REJECTED".equals(log.getStatus())) {
+                    moderationRepository.deleteByPostId(postId); // primero borra el log
+                    communityRepo.deleteById(postId);            // luego borra el post
+                    System.out.println("🗑️ Post " + postId + " eliminado automáticamente por contenido inapropiado.");
+                }
+
             } else {
                 System.err.println("⚠️ Respuesta de IA sin candidatos: " + response);
                 throw new RuntimeException("La IA no devolvió candidatos válidos");
