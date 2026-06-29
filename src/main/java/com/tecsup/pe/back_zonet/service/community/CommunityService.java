@@ -61,6 +61,24 @@ public class CommunityService {
         return commentRepository.save(comment);
     }
 
+    // Agrega este método a tu clase CommunityService
+    public List<CommentDTO> getCommentsByPostId(Long postId) {
+        // Buscamos los comentarios en el repositorio
+        List<Comment> comments = commentRepository.findByPostId(postId);
+
+        // Convertimos las entidades a DTOs para el frontend
+        return comments.stream().map(c -> {
+            CommentDTO dto = new CommentDTO();
+            dto.setId(c.getId());
+            dto.setPostId(c.getPost().getId());
+            dto.setUserId(c.getUser().getId());
+            dto.setContent(c.getContent());
+            // Asumiendo que quieres el nombre del autor en el frontend
+            dto.setUserName(c.getUser().getName());
+            return dto;
+        }).toList();
+    }
+
     @Transactional
     public boolean toggleReaction(ReactionDTO dto) {
         CommunityPost post = communityRepository.findById(dto.getPostId())

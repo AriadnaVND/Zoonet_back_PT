@@ -104,6 +104,13 @@ public class CommunityController {
         }
     }
 
+    // Agrega este endpoint a tu CommunityController
+    @GetMapping("/posts/{postId}/comments")
+    public ResponseEntity<List<CommentDTO>> getCommentsByPost(@PathVariable Long postId) {
+        List<CommentDTO> comments = communityService.getCommentsByPostId(postId);
+        return ResponseEntity.ok(comments);
+    }
+
     @PostMapping("/reactions")
     public ResponseEntity<Map<String, String>> toggleReaction(@RequestBody ReactionDTO dto) {
         try {
