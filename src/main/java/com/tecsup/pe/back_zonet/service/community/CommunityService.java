@@ -43,7 +43,7 @@ public class CommunityService {
 
     public List<CommunityPost> getAllPosts() {
         // ← CAMBIADO: filtra los posts rechazados por la IA
-        return communityRepository.findAllApprovedOrderByCreatedAtDesc();
+        return communityRepository.findAllApprovedWithDetailsOrderByCreatedAtDesc();
     }
 
     public Comment addComment(CommentDTO dto) {

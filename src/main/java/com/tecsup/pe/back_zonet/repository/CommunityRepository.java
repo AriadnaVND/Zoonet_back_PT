@@ -19,10 +19,12 @@ public interface CommunityRepository extends JpaRepository<CommunityPost, Long> 
 
     // ← NUEVO: trae solo posts que NO están rechazados por la IA
     @Query("SELECT cp FROM CommunityPost cp " +
+            "LEFT JOIN FETCH cp.lostPetSource lps " +
+            "LEFT JOIN FETCH lps.pet " +
             "WHERE cp.id NOT IN (" +
             "SELECT m.postId FROM AdminModerationLog m WHERE m.status = 'REJECTED'" +
             ") ORDER BY cp.createdAt DESC")
-    List<CommunityPost> findAllApprovedOrderByCreatedAtDesc();
+    List<CommunityPost> findAllApprovedWithDetailsOrderByCreatedAtDesc();
 
     @Query("SELECT cp FROM CommunityPost cp WHERE cp.lostPetSource.id = :lostPetId")
     CommunityPost findByLostPetSourceId(@Param("lostPetId") Long lostPetId);
