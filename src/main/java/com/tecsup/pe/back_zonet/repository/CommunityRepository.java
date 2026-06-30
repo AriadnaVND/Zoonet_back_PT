@@ -3,6 +3,8 @@ package com.tecsup.pe.back_zonet.repository;
 import com.tecsup.pe.back_zonet.entity.CommunityPost;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
 
 public interface CommunityRepository extends JpaRepository<CommunityPost, Long> {
@@ -21,4 +23,7 @@ public interface CommunityRepository extends JpaRepository<CommunityPost, Long> 
             "SELECT m.postId FROM AdminModerationLog m WHERE m.status = 'REJECTED'" +
             ") ORDER BY cp.createdAt DESC")
     List<CommunityPost> findAllApprovedOrderByCreatedAtDesc();
+
+    @Query("SELECT cp FROM CommunityPost cp WHERE cp.lostPetSource.id = :lostPetId")
+    CommunityPost findByLostPetSourceId(@Param("lostPetId") Long lostPetId);
 }

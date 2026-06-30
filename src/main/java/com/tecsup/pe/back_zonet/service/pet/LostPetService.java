@@ -135,7 +135,7 @@ public class LostPetService {
     @Transactional
     public LostPet markAsFound(Long reportId) {
         LostPet lostPet = lostPetRepository.findById(reportId)
-                .orElseThrow(() -> new RuntimeException("Reporte de mascota perdida no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Reporte no encontrado"));
 
         if (lostPet.isFound()) {
             throw new RuntimeException("Este reporte ya ha sido marcado como encontrado.");
@@ -144,21 +144,23 @@ public class LostPetService {
         lostPet.setFound(true);
         lostPetRepository.save(lostPet);
 
-        // 💡 AGREGADO: GENERACIÓN AUTOMÁTICA DE NOTIFICACIÓN DE ENCONTRADO
-        User owner = lostPet.getPet().getUser();
+        // 2. ELIMINAR POST DE LA COMUNIDAD Y SUS DEPENDENCIAS
+        CommunityPost post = communityRepository.findByLostPetSourceId(lostPet.getId());
+        if (post != null) {
+            // Al tener cascade = CascadeType.ALL en CommunityPost,
+            // borrar el post debería borrar automáticamente comentarios y reacciones
+            communityRepository.delete(post);
+        }
 
-        notificationService.createSystemNotification(
-                owner.getId(),
-                "¡ÉXITO! " + lostPet.getPet().getName() + " ENCONTRADO.",
-                "Felicidades, tu mascota ha sido marcada como encontrada y segura.",
-                "FOUND",
-                "MEDIUM"
-        );
-        // FIN AGREGADO
+        // 3. NOTIFICACIÓN A TODA LA COMUNIDAD
+        String title = "🎉 ¡Buenas noticias!";
+        String message = lostPet.getPet().getName() + " ha sido encontrado. ¡Gracias por tu ayuda!";
 
-        // Opcional: Marcar el CommunityPost asociado como "Inactivo" o eliminarlo
-        if (lostPet.getCommunityPost() != null) {
-            // Ejemplo: communityRepository.delete(lostPet.getCommunityPost());
+        List<User> communityUsers = userRepository.findAll();
+        for (User user : communityUsers) {
+            notificationService.createSystemNotification(
+                    user.getId(), title, message, "FOUND_PET", "MEDIUM"
+            );
         }
 
         return lostPet;
